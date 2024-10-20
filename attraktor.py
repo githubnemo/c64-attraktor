@@ -10,9 +10,9 @@ c = 8/3
 # Y = X(b-Z)-Y
 # Z = XY - cZ
 
-X_cur = 0.001
-Y_cur = 0.001
-Z_cur = 0.001
+X_cur = 2#0.001
+Y_cur = 1#0.001
+Z_cur = 1#0.001
 n_steps = 10_000
 dt = 0.01
 

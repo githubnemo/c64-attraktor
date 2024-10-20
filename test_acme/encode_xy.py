@@ -1,6 +1,6 @@
 
 
-def encode(x, y):
+def encode_v1(x, y):
     print(f';encode({x}, {y})')
     block = (x >> 3) << 3
 
@@ -18,6 +18,46 @@ def encode(x, y):
     print(f'ora#{bin(pattern)}')
     print(f'sta${hex(address)[2:]}')
     print()
+
+
+# Recipe for shifting a 16 bit value in memory
+#
+# Left:
+#
+# # fb = low byte, fc = high byte
+# asl$fb
+# rol$fc
+#
+# Right:
+#
+# lsr$fc
+# ror$fb
+
+
+def encode(x, y):
+    print(f';encode({x}, {y})')
+    block = (x >> 3) << 3
+
+    bit = 8 - (x & 7) - 1
+
+    yoff_local = y & 7
+    yoff_row = (y >> 3) * 5 << 6
+
+    print(f';block: {block}, bit: {bit}')
+    print(f';yoff local: {yoff_local}, row: {yoff_row}')
+
+    pattern = 1 << bit
+    address = 0x2000 + block + yoff_local + yoff_row
+
+    print('lda#$00')
+    print('sta$fb')
+    print('lda#$20')
+
+    print(f'lda${hex(address)[2:]}')
+    print(f'ora#{bin(pattern)}')
+    print(f'sta${hex(address)[2:]}')
+    print()
+
 
 
 #encode(5, 0)
@@ -64,3 +104,5 @@ def encode(x, y):
 #encode(15, 14)
 #encode(16, 13)
 #encode(16, 14)
+
+encode(0, 24*8)
