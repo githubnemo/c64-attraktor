@@ -268,6 +268,95 @@ clearscr_loop
     rol$fc
 
 
+!addr FP_A  = $C400
+!addr FP_B  = $C430
+!addr FP_C  = $C460
+!addr FP_DT = $C490
+
+!addr FP_XCUR = $C4C0
+!addr FP_YCUR = $C4F0
+!addr FP_ZCUR = $C520
+
+!addr FP_TEMP = $C550
+
+
+; store FAC to RAM (X=Addr.LB, Y=Addr.HB)
+!addr MOVMF = $BBD4
+; load FAC from RAM (A=Addr.LB, Y=Addr.HB)
+!addr MOVFM = $BBA2
+; FAC to 16-bit signed int (Y=Addr.LB, A=Addr.HB)
+!addr FACINX = $B1AA
+; Add FAC + number in RAM (A=Addr.LB, Y=Addr.HB)
+!addr FADD = $B867
+; Subtract FAC - number in RAM (A=Addr.LB, Y=Addr.HB)
+!addr FSUB = $B850
+; Divide number in RAM by FAC (A=Addr.LB, Y=Addr.HB)
+!addr FDIV = $BB0F
+; Multiply number from RAM * FAC (clobbers ARG, A=Addr.LB, Y=Addr.HB)
+!addr FMULT = $BA28
+; Convert 16-bit signed to float in FAC (Y=LB, A=HB)
+!addr GIVAYF = $B391
+
+!macro set_int_param .name, .value {
+    ldy#.value
+    lda#0
+    jsr GIVAYF
+    ldx #< .name
+    ldy #> .name
+    jsr MOVMF
+}
+
+!macro float_to_fac1 .name {
+    lda#< .name
+    ldy#> .name
+    jsr MOVFM
+}
+
++set_int_param FP_XCUR, 2
++set_int_param FP_YCUR, 1
++set_int_param FP_ZCUR, 1
+
++set_int_param FP_A, 10
++set_int_param FP_B, 28
++set_int_param FP_C, 8
+
+; initialize FP_C = 8/3
++set_int_param FP_TEMP, 3
+lda#< FP_C
+ldy#> FP_C
+jsr MOVFM
+lda#< FP_TEMP
+ldy#> FP_TEMP
+jsr FDIV
+ldx#< FP_C
+ldy#> FP_C
+jsr MOVMF
+
+
+; X_new = a * (Y_cur - X_cur)
+; X_cur += X_new * dt
+;
+; 1. Y_cur - X_cur
++float_to_fac1 FP_YCUR
+lda#< FP_XCUR
+ldy#> FP_XCUR
+jsr FSUB
+; 2. a * FAC1
+lda#< FP_A
+ldy#> FP_A
+jsr FMULT
+; 3. FAC1 * dt
+lda#< FP_DT
+ldy#> FP_DT
+jsr FMULT
+; 4. X_cur = FAC1
+ldx#< FP_XCUR
+ldy#> FP_XCUR
+jsr MOVMF
+
+
+
+
 
 hang
    jmp hang
