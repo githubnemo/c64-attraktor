@@ -23,8 +23,9 @@ points_2d = []
 def plot(x, y, z):
     global points, points_2d
     points.append((x, y, z))
-    points_2d.append((x * (320/2)/20 + 160, (y + z*10) * (200/512)))
+    #points_2d.append((x * (320/2)/20 + 160, (y + z*10) * (200/512)))
     #points_2d.append((int((x * (320/2)/20 + 160)), int((y + z*10) * (200/512))))
+    points_2d.append((int(x), int(y + z*10)))
 
 
 for step in range(n_steps):
@@ -39,20 +40,7 @@ for step in range(n_steps):
 
     plot(X_cur, Y_cur, Z_cur)
 
-FLOAD(A_ADDR, a)
-FLOAD(B_ADDR, b)
-FLOAD(C_ADDR, c)
-FLOAD(DT_ADDR, dt)
 
-FA1 = Y_cur
-FSUB(FA1, A=X_cur.LB, Y=X_cur.HB)
-FMULT(FA1, A=#< A_ADDR, Y=#> A_ADDR)
-# now FA1 = X_new
-FMULT(FA1, A=#< DT_ADDR, Y=#> DT_ADDR)
-FADD(FA1, A=#< XCUR_ADDR, Y=#> XCUR_ADDR)
-# FA1=X_cur + X_new
-MOVEMF(FAC, X=#< XCUR_ADDR, Y=#> XCUR_ADDR)
-# X_cur = X_cur'
 
 
 
