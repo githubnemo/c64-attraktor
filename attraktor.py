@@ -24,8 +24,18 @@ def plot(x, y, z):
     global points, points_2d
     points.append((x, y, z))
     #points_2d.append((x * (320/2)/20 + 160, (y + z*10) * (200/512)))
+    points_2d.append((int((x * (320/2)/20 + 160)), int((y + z*10) * (200/512))))
+    #points_2d.append((int(x), int(y + z*10)))
+
+
     #points_2d.append((int((x * (320/2)/20 + 160)), int((y + z*10) * (200/512))))
-    points_2d.append((int(x), int(y + z*10)))
+
+    u = (y + z * 10)
+    points_2d.append((
+        int(x * 8 + 160),
+        int( (u * 200)) >> 9,
+    ))
+
 
 
 for step in range(n_steps):

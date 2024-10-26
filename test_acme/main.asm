@@ -268,15 +268,16 @@ clearscr_loop
 !addr FP_C  = $C460
 !addr FP_DT = $C490
 
-!addr FP_XCUR = $C4C0
+!addr FP_XCUR = $C4C0 ; 6 byte per float
 !addr FP_YCUR = $C4F0
 !addr FP_ZCUR = $C520
 
-!addr FP_TEMP = $C550
+!addr FP_TEMP    = $C550
+!addr FP_SCALE_Y = $C560
 
 !addr INT_X = $C600
-!addr INT_Y = $C610
-!addr INT_Z = $C620
+!addr INT_Y = $C602
+!addr INT_Z = $C604
 
 !addr SCREEN_ADDR = $C630
 
@@ -332,17 +333,12 @@ jsr blit_xy
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+lda#00
+sta$FC
+lda#$04
+sta$FB
+ldy #0
+jsr blit_xy
 
 
 
@@ -412,11 +408,12 @@ jsr blit_xy
     jsr MOVMF
 }
 
-!macro fac1_to_int .location {
+!macro fac1_to_int16 .location {
     jsr FACINX
     sta > .location
     sty < .location
 }
+
 
 
 
@@ -428,6 +425,11 @@ jsr blit_xy
 +set_int_param FP_A, 10
 +set_int_param FP_B, 28
 +set_int_param FP_C, 8
++set_int_param FP_DT, 1
+
++set_int_param FP_SCALE_Y, 100
+
+
 
 ; initialize FP_C = 8/3
 +set_int_param FP_TEMP, 3
@@ -441,8 +443,11 @@ ldx#< FP_C
 ldy#> FP_C
 jsr MOVMF
 
+
+
+
 ; initialize FP_DT to 0.01
-+set_int_param FP_TEMP, 10
++set_int_param FP_TEMP, 100
 lda#< FP_DT
 ldy#> FP_DT
 jsr MOVFM
@@ -457,11 +462,31 @@ jsr MOVMF
 
 
 
+lda$214e
+ora#0b1
+sta$214e
+
+
+
+main
+!for .x, 0, 2 {
+    jsr xyz_step
+    lda INT_X
+    sta $FB
+    lda INT_X + 1
+    sta $FC
+    ldy INT_Y
+
+    jsr blit_xy
+
+}
+
+
+
 
 
 hang
    jmp hang
-   rts
 
 
 
@@ -494,7 +519,7 @@ xyz_step
 
 
     ; store int(fp_x) as X coordinate
-    +fac1_to_int INT_X
+    +fac1_to_int16 INT_X
 
 
     ; Y_new = X_cur * (b - Z_cuR) - Y_cur
@@ -536,10 +561,25 @@ xyz_step
     +movmf FP_ZCUR
 
 
+
     ; store int(y + z*10) as Y coordinate
     +fmult FP_A ; XXX abuses the fact that A=10
     +fadd FP_YCUR
-    +fac1_to_int INT_Y
+    +fmult FP_SCALE_Y
+    +fac1_to_int16 INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+
+
+
+    rts
 
 
 
