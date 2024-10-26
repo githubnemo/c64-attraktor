@@ -279,7 +279,34 @@ clearscr_loop
 !addr INT_Z = $C620
 
 !addr SCREEN_ADDR = $C630
-!addr SCREEN_MASK = $C640
+
+; LUT for ORing patterns
+!addr SCREEN_MASK_0 = $C640
+!addr SCREEN_MASK_1 = $C641
+!addr SCREEN_MASK_2 = $C642
+!addr SCREEN_MASK_3 = $C643
+!addr SCREEN_MASK_4 = $C644
+!addr SCREEN_MASK_5 = $C645
+!addr SCREEN_MASK_6 = $C646
+!addr SCREEN_MASK_7 = $C647
+
+
+lda#0b00000001
+sta SCREEN_MASK_0
+lda#0b00000010
+sta SCREEN_MASK_1
+lda#0b00000100
+sta SCREEN_MASK_2
+lda#0b00001000
+sta SCREEN_MASK_3
+lda#0b00010000
+sta SCREEN_MASK_4
+lda#0b00100000
+sta SCREEN_MASK_5
+lda#0b01000000
+sta SCREEN_MASK_6
+lda#0b10000000
+sta SCREEN_MASK_7
 
 
 !macro lshift_16bit .hb, .lb {
@@ -297,10 +324,10 @@ clearscr_loop
 ; Y is  8 bit (Y)
 lda#00
 sta$FC
-lda#$00
+lda#$02
 sta$FB
 
-ldy#$22
+ldy#$0
 jsr blit_xy
 
 
@@ -310,141 +337,17 @@ jsr blit_xy
 
 
 
-; FIXME remove this
-jmp hang
-
-
-lda#05
-sta$FC
-lda#$af
-sta$FB
-ldy#$0a
-jsr blit_xy
-
-
-
-
-blit_xy
-    ; parameters: x (16 bit), y (8 bit)
-    ; 0 <= x < 320, 0 <= y < 200
-    ;
-    ; assume x is in $FC $FB
-    ; assume y is in Y
-    ;
-    ; clobbers SCREEN_ADDR and SCREEN_MASK global.
-
-    ; this is a quest to resolve x/y coordinates into an
-    ; screen buffer address. we're assuming 0x2000 as base
-    ; address.
-    ;
-    ; since we have 40x25 byte (8 pixel each, giving 320x200 pixel)
-    ; we have a global adressing (byte-level) and a local adressing
-    ; (bit-level).
-
-    ; assume x is in $FC $FB
-    ; assume y is in Y
-
-    ; intitialize addr. variable to 0x2000
-    lda#$00
-    sta SCREEN_ADDR
-    lda#$20
-    sta SCREEN_ADDR + 1
-
-    ; compute pixel mask to OR on the region; this will set the pixel bit
-    ; in the byte for which we're currently computing the address of.
-_screen_mask
-    lda $FB
-    and #7
-    eor #7
-    sta SCREEN_MASK
-
-    ; we round the X offset to a power of 8 since we have
-    ; 8 pixel for each adressable byte (pixels are bits, remember).
-    ;
-    ; addr = addr + (x & 0xF8)
-    ;                ^^^^^^^^ -> x.LB = (x.LB & 8)
-_x_shift
-    clc
-    lda $FB
-    and #$F8
-    adc SCREEN_ADDR
-    sta SCREEN_ADDR
-    lda $FC
-    adc SCREEN_ADDR + 1
-    sta SCREEN_ADDR + 1
-
-    ; yoff_row = (y >> 3) * (5 << 6)
-    ;
-    ; t * (5 << 6) = (t*5)*(1<<6) = (t*4+t)*(1<<6) = (t+t/2**2)*(1<<8)
-    ; since t = (y>>3) we have (y/2**3 + y/2**3 * 2**2)*(1<<8)
-    ;         = ((y>>3) + (y>>1))*(1<<8)
-
-    ; clear $FB/$FC since we already did all the necessary computation with
-    ; the x values.
-_y_shift_global
-    lda#0
-    sta$FB
-    sta$FC
-    ; $FB=y >> 3
-    tya
-    lsr
-    lsr
-    lsr
-    sta$fb
-    ; A=y >> 1
-    tya
-    lsr
-    ; $FB = $FB + (y>>1)
-    adc$fb
-    sta$fb
-    clc
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-    +lshift_16bit $FC, $FB
-
-    ; add yoff_row to screen_addr (0x2000)
-    clc
-    lda$fb
-    adc SCREEN_ADDR
-    lda$fc
-    adc SCREEN_ADDR+1
-
-    ; add yoff_local to screen_addr
-_y_shift_local
-    clc
-    tya
-    and #7
-    adc SCREEN_ADDR
-    lda#0
-    adc SCREEN_ADDR+1
-
-    ; load addr., mask pattern, store again
-    lda SCREEN_ADDR
-    sta $FB
-    lda SCREEN_ADDR+1
-    sta $FC
-    ldy #0
-    lda ($FB), Y
-    ;ora SCREEN_MASK
-    ora #0b1
-    sta ($FB), Y
-
-    rts
 
 
 
 
 
 
-hang
-   jmp hang
-   rts
-!eof
+
+
+
+
+
 
 
 ; store FAC to RAM (X=Addr.LB, Y=Addr.HB)
@@ -550,6 +453,19 @@ ldx#< FP_DT
 ldy#> FP_DT
 jsr MOVMF
 
+
+
+
+
+
+
+hang
+   jmp hang
+   rts
+
+
+
+
 xyz_step
     ; X_new = a * (Y_cur - X_cur)
     ; X_cur = X_cur + X_new * dt
@@ -628,6 +544,122 @@ xyz_step
 
 
 
+blit_xy
+    ; parameters: x (16 bit), y (8 bit)
+    ; 0 <= x < 320, 0 <= y < 200
+    ;
+    ; assume x is in $FC $FB
+    ; assume y is in Y
+    ;
+    ; clobbers SCREEN_ADDR global.
+
+    ; this is a quest to resolve x/y coordinates into an
+    ; screen buffer address. we're assuming 0x2000 as base
+    ; address.
+    ;
+    ; since we have 40x25 byte (8 pixel each, giving 320x200 pixel)
+    ; we have a global adressing (byte-level) and a local adressing
+    ; (bit-level).
+
+    ; assume x is in $FC $FB
+    ; assume y is in Y
+
+    ; intitialize addr. variable to 0x2000
+    lda#$00
+    sta SCREEN_ADDR
+    lda#$20
+    sta SCREEN_ADDR + 1
+
+    ; compute pixel mask to OR on the region; this will set the pixel bit
+    ; in the byte for which we're currently computing the address of.
+_screen_mask
+    lda $FB
+    and #7
+    eor #7
+    tax
+
+    ; we round the X offset to a power of 8 since we have
+    ; 8 pixel for each adressable byte (pixels are bits, remember).
+    ;
+    ; addr = addr + (x & 0xF8)
+    ;                ^^^^^^^^ -> x.LB = (x.LB & 8)
+_x_shift
+    clc
+    lda $FB
+    and #$F8
+    adc SCREEN_ADDR
+    sta SCREEN_ADDR
+    lda $FC
+    adc SCREEN_ADDR + 1
+    sta SCREEN_ADDR + 1
+
+_y_shift_global
+    ;    yoff_row = (y >> 3) * 40 * 8
+    ;    yoff_row = (y & 0xF8) * 40
+    ;    u = y & 0xF8
+    ;    y_off_row = u * 40
+    ;    y_off_row = u * ((1 << 5) + (1 << 3))
+    ;    y_off_row = (u << 5) + (u << 3)
+    ;
+    ; clear high byte of (FC,FB) and (FE,FD)
+    lda#$0
+    sta$fc
+    sta$fe
+    ; init low bytes to y * 0xF8 (u = y & 0xF8)
+    tya
+    and #$f8
+    sta $fb
+    sta $fd
+    ; y1 = u << 5
+    +lshift_16bit $FC, $FB
+    +lshift_16bit $FC, $FB
+    +lshift_16bit $FC, $FB
+    +lshift_16bit $FC, $FB
+    +lshift_16bit $FC, $FB
+    ; y2 = u << 3
+    +lshift_16bit $FE, $FD
+    +lshift_16bit $FE, $FD
+    +lshift_16bit $FE, $FD
+    ; y_off_row = y1 + y2
+    clc
+    lda $fd
+    adc $fb
+    sta $fb
+    lda $fe
+    adc $fc
+    sta $fc
+
+    ; add y_off_row (FE/FD) to screen addr.
+    clc
+    lda SCREEN_ADDR
+    adc $fb
+    sta SCREEN_ADDR
+    lda SCREEN_ADDR + 1
+    adc $fc
+    sta SCREEN_ADDR + 1
+
+    ; add yoff_local to screen_addr
+_y_shift_local
+    clc
+    tya
+    and #7
+    adc SCREEN_ADDR
+    sta SCREEN_ADDR
+    lda#0
+    adc SCREEN_ADDR+1
+    sta SCREEN_ADDR+1
+
+    ; load addr., mask pattern, store again
+    lda SCREEN_ADDR
+    sta $FB
+    lda SCREEN_ADDR+1
+    sta $FC
+    ldy #0
+    lda ($FB), Y
+    ora SCREEN_MASK_0, X
+    sta ($FB), Y
+
+    rts
 
 
 
