@@ -1,6 +1,6 @@
 # Lorenz Attraktor on C64
 
-
+https://github.com/user-attachments/assets/e2ddfaac-57ff-45fa-83a3-d15bf8e24276
 
 ## Compiling / Development
 
