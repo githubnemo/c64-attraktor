@@ -31,6 +31,9 @@ At the BASIC screen, type
 
 The screen should turn black and dots should appear.
 
+If you want to run a specific version of VICE, set the `X64SC` environment
+variable.
+
 ## Resources
 
 This project used several resources for which I am really grateful:

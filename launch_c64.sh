@@ -3,6 +3,9 @@
 script_dir="$(dirname "$(readlink -e "$0")")"
 readonly script_dir
 
+X64SC=${X64SC:-x64sc}
+
+
 # NOTE: RESTORE is ESC + Pg Up
 #
 # NOTE: VICE monitor (for debugging & disassembling) is launched with Alt+h
@@ -14,7 +17,7 @@ readonly script_dir
 # Note that we supply the `-autostartprgmode 1` flag so that we can launch
 # .PRG files (actually CBM files) directly from the host system, skipping
 # the creating of d64 disk images. 1 means to inject into RAM.
-x64sc \
+"${X64SC}" \
     -kernal "$script_dir"/ROM/vice-3.8/data/C64/kernal-901227-03.bin \
     -basic "$script_dir"/ROM/vice-3.8/data/C64/basic-901226-01.bin \
     -chargen "$script_dir"/ROM/vice-3.8/data/C64/chargen-906143-02.bin \
