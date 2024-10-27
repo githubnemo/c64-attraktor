@@ -152,22 +152,22 @@ sta SCREEN_MASK_7
 
 ; X is 16 bit (FC FB)
 ; Y is  8 bit (Y)
-lda#00
-sta$FC
-lda#$02
-sta$FB
+;lda#00
+;sta$FC
+;lda#$02
+;sta$FB
 
-ldy#$0
-jsr blit_xy
+;ldy#$0
+;jsr blit_xy
 
 
 
-lda#00
-sta$FC
-lda#$04
-sta$FB
-ldy #0
-jsr blit_xy
+;lda#00
+;sta$FC
+;lda#$04
+;sta$FB
+;ldy #0
+;jsr blit_xy
 
 
 
@@ -309,9 +309,7 @@ jsr MOVMF
 
 
 
-lda$214e
-ora#0b1
-sta$214e
+
 
 
 main
