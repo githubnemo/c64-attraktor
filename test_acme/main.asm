@@ -199,6 +199,8 @@ jsr blit_xy
 ; Subtract ARG from FAC1
 ; FAC = ARG - FAC
 !addr FSUBT = $B853
+; Convert FAC1 to 32 bit integer
+!addr QINT = $BC9B
 
 
 !macro set_int_param .name, .value {
@@ -431,21 +433,30 @@ xyz_step
 
 
     ; store int(y + z*10) as Y coordinate
-    ;+fmult FP_A ; XXX abuses the fact that A=10
-    ;+fadd FP_YCUR
-    ;+fmult FP_SCALE_Y
-    ;+fac1_to_int16 INT_Y
+    +fmult FP_A ; XXX abuses the fact that A=10
+    +fadd FP_YCUR
+    +fmult FP_SCALE_Y
+    ; normally we'd use +fac1_to_int16 but it assumes signed
+    ; integer (which we don't expect) and therefore values >32k
+    ; will break. instead we'll use QINT and take the lowest
+    ; two bytes.
+    jsr QINT
+    lda $64 ; LB of 16 bit int
+    ldy $65 ; HB of 16 bit int
+    sta INT_Y+1
+    sty INT_Y
 
 
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
-    ;+rshift_16bit INT_Y+1, INT_Y
+
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
+    +rshift_16bit INT_Y+1, INT_Y
 
 
     rts
