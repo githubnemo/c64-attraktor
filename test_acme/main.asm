@@ -26,14 +26,10 @@ start
    ora#0b00001000
    sta$d018        ; move graphics to $2000 instead of $1000
 
-;   lda#3
-;   sta$d011
-;   lda#$08
-;   sta$d016
-;   lda#$18
-;   sta$d018
 
-   ; colors are defined for 8x8 pixels at once, upper nibble for 'on' pixels
+   ; colors are defined for 8x8 pixels at once, upper nibble for 'on' pixels.
+   ; for simplicity we'll fill all 40x25 byte with white for on-pixels and
+   ; black for off-pixels.
    ldx#$00
    lda#0b11110000
 colorfill_loop
@@ -310,8 +306,6 @@ jsr MOVMF
 
 
 
-
-
 main
     lda #$20 - 5
     sta $FA
@@ -328,8 +322,6 @@ draw_loop
     dec $FA
     ;bne draw_loop
     jmp draw_loop
-
-
 
 
 
@@ -589,31 +581,4 @@ _y_shift_local
 
 
 
-
-;;
-;; Example
-;;
-;
-;*=$0801
-;!byte $0c,$08,$b5,$07,$9e,$20,$32,$30,$36,$32,$00,$00,$00
-;jmp main
-;
-;.hellotext
-;    !scr "hello, world!",0
-;    !set ofs = 14
-;
-;main
-;    ldy #0
-;
-;hello
-;    lda .hellotext,y
-;    beq +
-;    sta $400+ofs,y
-;    lda #1
-;    sta $d800+ofs,y
-;    iny
-;    jmp hello
-;+
-;    rts
-;
 ; vim:ft=acme
