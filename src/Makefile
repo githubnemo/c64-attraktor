@@ -1,6 +1,5 @@
 CPU = 6502
 C1541 = c1541
-# Also pass symbols to VICE monitor
 X64 = ../launch_c64.sh
 OUTPUT = "myprg.prg"
 LABEL_FILE = "symbols.list"
@@ -27,8 +26,8 @@ d64: $(OUTPUT)
 
 run: d64
 	echo "ll \"$(LABEL_FILE)\"" > moncmds
-	$(X64) -moncommands moncmds  $(OUTPUT)
-#	$(X64) $(DISKFILENAME)
+	$(X64) -moncommands moncmds $(OUTPUT)
+#	$(X64) -moncommands moncmds $(DISKFILENAME)
 
 clean:
 	rm -f $(OUTPUT) $(DISKFILENAME)
