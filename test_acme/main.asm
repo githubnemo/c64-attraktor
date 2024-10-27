@@ -456,6 +456,14 @@ xyz_step
     +rshift_16bit INT_Y+1, INT_Y
     +rshift_16bit INT_Y+1, INT_Y
 
+    ; from here on we will only use INT_Y since the possible Y
+    ; range is from 0 to 200 anyway.
+    ; we need to invert it so the image is not flipped, though.
+    clc
+    lda #200
+    sbc INT_Y
+    sta INT_Y
+
 
     rts
 
