@@ -184,6 +184,7 @@ jsr blit_xy
 ; Add FAC + number in RAM (A=Addr.LB, Y=Addr.HB)
 !addr FADD = $B867
 ; Subtract FAC - number in RAM (A=Addr.LB, Y=Addr.HB)
+; FAC = Mem - FAC
 !addr FSUB = $B850
 ; Divide number in RAM by FAC (A=Addr.LB, Y=Addr.HB)
 !addr FDIV = $BB0F
@@ -191,6 +192,14 @@ jsr blit_xy
 !addr FMULT = $BA28
 ; Convert 16-bit signed to float in FAC (Y=LB, A=HB)
 !addr GIVAYF = $B391
+; Copy ARG to FAC
+!addr MOVEF = $BBFC
+; Copy FAC to ARG
+!addr MOVFA = $BC0F
+; Subtract ARG from FAC1
+; FAC = ARG - FAC
+!addr FSUBT = $B853
+
 
 !macro set_int_param .name, .value {
     ldy#.value
@@ -287,6 +296,16 @@ ldy#> FP_DT
 jsr MOVMF
 
 
+; testing operation order of FSUB
+;
+;+set_int_param FP_TEMP, 100
+;+float_to_fac1 FP_A
+;lda #< FP_TEMP
+;ldy #> FP_TEMP
+;jsr FSUB
+;+movmf FP_TEMP ; expect 90 in FP_TEMP
+
+
 
 lda$214e
 ora#0b1
@@ -307,7 +326,8 @@ draw_loop
     jsr blit_xy
 
     dec $FA
-    bne draw_loop
+    ;bne draw_loop
+    jmp draw_loop
 
 
 
@@ -325,9 +345,9 @@ xyz_step
     ; X_cur = X_cur + X_new * dt
     ;
     ; 1. Y_cur - X_cur
-    +float_to_fac1 FP_YCUR
-    lda#< FP_XCUR
-    ldy#> FP_XCUR
+    +float_to_fac1 FP_XCUR
+    lda#< FP_YCUR
+    ldy#> FP_YCUR
     jsr FSUB
     ; 2. a * FAC1
     lda#< FP_A
@@ -366,12 +386,16 @@ xyz_step
     ; Y_cur = Y_cur + Y_new * dt
 
     ; (b - Z_cur)
-    +float_to_fac1 FP_B
-    +fsub FP_ZCUR
+    +float_to_fac1 FP_ZCUR
+    +fsub FP_B
     ; FAC1 * X_cur
     +fmult FP_XCUR
-    ; FAC1 - Y_cur
-    +fsub FP_YCUR
+    ; FAC1 = ARG - FAC1
+    ;  ARG = FAC1 (= X_cur * (b - Z_cur))
+    ;  FAC1 = Y_cur
+    jsr MOVFA                ; ARG = FAC1
+    +float_to_fac1 FP_YCUR
+    jsr FSUBT
     ; FAC1 * dt
     +fmult FP_DT
     ; FAC1 + Y_cur
@@ -393,7 +417,9 @@ xyz_step
     +float_to_fac1 FP_XCUR
     +fmult FP_YCUR
     ; 3. FAC1 - temp
-    +fsub FP_TEMP
+    jsr MOVFA
+    +float_to_fac1 FP_TEMP
+    jsr FSUBT
     ; 4. FAC1 * dt
     +fmult FP_DT
     ; 5. FAC1 + Z_cur
