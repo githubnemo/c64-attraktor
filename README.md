@@ -43,4 +43,14 @@ This project used several resources for which I am really grateful:
 - [Christian Bauer's VIC-II screen doc](http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
   (it seems to be the most correct one I found)
 
+There are three python scripts that were helpful in the development of
+the final assembler code.
 
+1. [`attraktor.py`](./attraktor.py) - a reference implementation that got
+   subsequently optimized to bit oeprations
+2. [`encode_xy.py`](./src/encode_xy.py) - a way of testing & reverse engineering
+   the bit addressing in the 320x200 (but actually 40x25 byte) screen of the
+   C64
+3. [`cbm_to_float.py`](./src/cbm_to_float.py) - a script of converting C64
+   floating point numbers (5 byte) to python floats for easy debugging with
+   the VICE monitor
