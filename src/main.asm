@@ -31,7 +31,7 @@ start
    ; for simplicity we'll fill all 40x25 byte with white for on-pixels and
    ; black for off-pixels.
    ldx#$00
-   lda#0b11110000
+   lda#0b01010000
 colorfill_loop
    sta$0400,x
    sta$0500,x
