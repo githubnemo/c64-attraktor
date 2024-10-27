@@ -33,7 +33,7 @@ def plot(x, y, z):
     u = (y + z * 10)
     points_2d.append((
         int(x * 8 + 160),
-        int( (u * 200)) >> 9,
+        int( (u * 25)) >> 6,
 
     ))
 

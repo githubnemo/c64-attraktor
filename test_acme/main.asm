@@ -267,7 +267,7 @@ jsr blit_xy
 +set_int_param FP_C, 8
 +set_int_param FP_DT, 1
 
-+set_int_param FP_SCALE_Y, 200
++set_int_param FP_SCALE_Y, 25
 +set_int_param FP_OFFSET_X, 160
 +set_int_param FP_SCALE_X, 8 ; todo optimize by shifting exp. directly
 
@@ -315,7 +315,7 @@ sta$214e
 
 
 main
-    lda #$ff
+    lda #$20 - 5
     sta $FA
 draw_loop
     jsr xyz_step
@@ -431,8 +431,12 @@ xyz_step
 
 
 
-
+    ; compute Y addr.
+    ; u = (y + z * 10)
+    ; y_px = int((u * 25)) >> 6
+    ;
     ; store int(y + z*10) as Y coordinate
+    ; note that FAC1 contains Z_CUR at this point in time.
     +fmult FP_A ; XXX abuses the fact that A=10
     +fadd FP_YCUR
     +fmult FP_SCALE_Y
@@ -441,16 +445,10 @@ xyz_step
     ; will break. instead we'll use QINT and take the lowest
     ; two bytes.
     jsr QINT
-    lda $64 ; LB of 16 bit int
-    ldy $65 ; HB of 16 bit int
+    lda $64 ; HB of 16 bit int
+    ldy $65 ; LB of 16 bit int
     sta INT_Y+1
     sty INT_Y
-
-
-
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
     +rshift_16bit INT_Y+1, INT_Y
     +rshift_16bit INT_Y+1, INT_Y
     +rshift_16bit INT_Y+1, INT_Y
