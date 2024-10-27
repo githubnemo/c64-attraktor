@@ -25,6 +25,12 @@ They can be found in the release [download][vice download] of VICE.
     cd src
     make run
 
+At the BASIC screen, type
+
+    SYS2049
+
+The screen should turn black and dots should appear.
+
 ## Resources
 
 This project used several resources for which I am really grateful:
