@@ -89,178 +89,6 @@ clearscr_loop
 ; when base addr. = $2000, then 0b0 is bit 0 at $2000, 0b1 is bit 1 at $2000.
 ;
 
-   ; address of the bitmap is given by $d018 bit 4, usually $2000
-;   lda#0b101
-;   !for i, 24, 31 {
-;    sta$2000+i
-;   }
-;
-
-    ;lda#0b1000
-    ;sta$2000
-
-    ;lda#0b1000000
-    ;sta$2008
-
-    ;lda#0b100000
-    ;sta$2078
-
-    ;lda#0b100
-    ;sta$2001
-
-    ;lda#0b100000
-    ;sta$2009
-
-    ;lda#0b1000
-    ;sta$2142
-
-
-
-    ;; L
-    ;lda$2142
-    ;ora#0b1000
-    ;sta$2142
-
-    ;lda$2143
-    ;ora#0b1000
-    ;sta$2143
-
-    ;lda$2144
-    ;ora#0b1000
-    ;sta$2144
-
-    ;lda$2145
-    ;ora#0b1000
-    ;sta$2145
-
-    ;lda$2146
-    ;ora#0b1000
-    ;sta$2146
-
-    ;lda$2145
-    ;ora#0b100
-    ;sta$2145
-
-    ;lda$2146
-    ;ora#0b100
-    ;sta$2146
-
-    ;lda$2145
-    ;ora#0b10
-    ;sta$2145
-
-    ;lda$2146
-    ;ora#0b10
-    ;sta$2146
-
-
-    ;; O
-    ;lda$214a
-    ;ora#0b10000000
-    ;sta$214a
-
-    ;lda$214b
-    ;ora#0b10000000
-    ;sta$214b
-
-    ;lda$214c
-    ;ora#0b10000000
-    ;sta$214c
-
-    ;lda$214d
-    ;ora#0b10000000
-    ;sta$214d
-
-    ;lda$214e
-    ;ora#0b10000000
-    ;sta$214e
-
-    ;lda$214a
-    ;ora#0b1000000
-    ;sta$214a
-
-    ;lda$214e
-    ;ora#0b1000000
-    ;sta$214e
-
-    ;lda$214a
-    ;ora#0b100000
-    ;sta$214a
-
-    ;lda$214e
-    ;ora#0b100000
-    ;sta$214e
-
-    ;lda$214a
-    ;ora#0b10000
-    ;sta$214a
-
-    ;lda$214b
-    ;ora#0b10000
-    ;sta$214b
-
-    ;lda$214c
-    ;ora#0b10000
-    ;sta$214c
-
-    ;lda$214d
-    ;ora#0b10000
-    ;sta$214d
-
-    ;lda$214e
-    ;ora#0b10000
-    ;sta$214e
-
-
-
-    ;; L
-    ;lda$214a
-    ;ora#0b10
-    ;sta$214a
-
-    ;lda$214b
-    ;ora#0b10
-    ;sta$214b
-
-    ;lda$214c
-    ;ora#0b10
-    ;sta$214c
-
-    ;lda$214d
-    ;ora#0b10
-    ;sta$214d
-
-    ;lda$214e
-    ;ora#0b10
-    ;sta$214e
-
-    ;lda$214d
-    ;ora#0b1
-    ;sta$214d
-
-    ;lda$214e
-    ;ora#0b1
-    ;sta$214e
-
-    ;lda$2155
-    ;ora#0b10000000
-    ;sta$2155
-
-    ;lda$2156
-    ;ora#0b10000000
-    ;sta$2156
-
-
-
-    ;;encode(0, 56)
-    ;;block: 0, bit: 7
-    ;;yoff local: 0, row: 2240
-    ;lda$28c0
-    ;ora#0b10000000
-    ;sta$28c0
-
-
-
 
 
 !addr FP_A  = $C400
@@ -272,12 +100,13 @@ clearscr_loop
 !addr FP_YCUR = $C4F0
 !addr FP_ZCUR = $C520
 
-!addr FP_TEMP    = $C550
-!addr FP_SCALE_Y = $C560
+!addr FP_TEMP     = $C550
+!addr FP_SCALE_Y  = $C560
+!addr FP_OFFSET_X = $C570
+!addr FP_SCALE_X  = $C580
 
 !addr INT_X = $C600
 !addr INT_Y = $C602
-!addr INT_Z = $C604
 
 !addr SCREEN_ADDR = $C630
 
@@ -410,8 +239,8 @@ jsr blit_xy
 
 !macro fac1_to_int16 .location {
     jsr FACINX
-    sta > .location
-    sty < .location
+    sty .location
+    sta .location + 1
 }
 
 
@@ -427,17 +256,17 @@ jsr blit_xy
 +set_int_param FP_C, 8
 +set_int_param FP_DT, 1
 
-+set_int_param FP_SCALE_Y, 100
-
-
++set_int_param FP_SCALE_Y, 200
++set_int_param FP_OFFSET_X, 160
++set_int_param FP_SCALE_X, 8 ; todo optimize by shifting exp. directly
 
 ; initialize FP_C = 8/3
 +set_int_param FP_TEMP, 3
-lda#< FP_C
-ldy#> FP_C
-jsr MOVFM
 lda#< FP_TEMP
 ldy#> FP_TEMP
+jsr MOVFM
+lda#< FP_C
+ldy#> FP_C
 jsr FDIV
 ldx#< FP_C
 ldy#> FP_C
@@ -445,20 +274,17 @@ jsr MOVMF
 
 
 
-
 ; initialize FP_DT to 0.01
 +set_int_param FP_TEMP, 100
-lda#< FP_DT
-ldy#> FP_DT
-jsr MOVFM
 lda#< FP_TEMP
 ldy#> FP_TEMP
+jsr MOVFM
+lda#< FP_DT
+ldy#> FP_DT
 jsr FDIV
 ldx#< FP_DT
 ldy#> FP_DT
 jsr MOVMF
-
-
 
 
 
@@ -467,9 +293,10 @@ ora#0b1
 sta$214e
 
 
-
 main
-!for .x, 0, 2 {
+    lda #$ff
+    sta $FA
+draw_loop
     jsr xyz_step
     lda INT_X
     sta $FB
@@ -479,7 +306,9 @@ main
 
     jsr blit_xy
 
-}
+    dec $FA
+    bne draw_loop
+
 
 
 
@@ -518,11 +347,22 @@ xyz_step
     jsr MOVMF
 
 
+
+
     ; store int(fp_x) as X coordinate
+    ;lda $61
+    ;adc #3
+    ;sta $61
+    lda #< FP_SCALE_X
+    ldy #> FP_SCALE_X
+    jsr FMULT
+    lda #< FP_OFFSET_X
+    ldy #> FP_OFFSET_X
+    jsr FADD
     +fac1_to_int16 INT_X
 
 
-    ; Y_new = X_cur * (b - Z_cuR) - Y_cur
+    ; Y_new = X_cur * (b - Z_cur) - Y_cur
     ; Y_cur = Y_cur + Y_new * dt
 
     ; (b - Z_cur)
@@ -538,6 +378,7 @@ xyz_step
     +fadd FP_YCUR
     ; Y_cur = FAC1
     +movmf FP_YCUR
+
 
 
 
@@ -562,21 +403,23 @@ xyz_step
 
 
 
-    ; store int(y + z*10) as Y coordinate
-    +fmult FP_A ; XXX abuses the fact that A=10
-    +fadd FP_YCUR
-    +fmult FP_SCALE_Y
-    +fac1_to_int16 INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
-    +rshift_16bit INT_Y+1, INT_Y
 
+    ; store int(y + z*10) as Y coordinate
+    ;+fmult FP_A ; XXX abuses the fact that A=10
+    ;+fadd FP_YCUR
+    ;+fmult FP_SCALE_Y
+    ;+fac1_to_int16 INT_Y
+
+
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
+    ;+rshift_16bit INT_Y+1, INT_Y
 
 
     rts
@@ -591,7 +434,7 @@ blit_xy
     ; assume x is in $FC $FB
     ; assume y is in Y
     ;
-    ; clobbers SCREEN_ADDR global.
+    ; clobbers SCREEN_ADDR global, FC/FB and FD/FE.
 
     ; this is a quest to resolve x/y coordinates into an
     ; screen buffer address. we're assuming 0x2000 as base

@@ -14,7 +14,7 @@ X_cur = 2#0.001
 Y_cur = 1#0.001
 Z_cur = 1#0.001
 n_steps = 10_000
-dt = 0.01
+dt = 0.005
 
 points = []
 points_2d = []
@@ -34,6 +34,7 @@ def plot(x, y, z):
     points_2d.append((
         int(x * 8 + 160),
         int( (u * 200)) >> 9,
+
     ))
 
 
