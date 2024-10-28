@@ -90,7 +90,6 @@ clearscr_loop
 !addr FP_A  = $C400
 !addr FP_B  = $C430
 !addr FP_C  = $C460
-!addr FP_DT = $C490
 
 !addr FP_XCUR = $C4C0 ; 6 byte per float
 !addr FP_YCUR = $C4F0
@@ -260,7 +259,6 @@ sta SCREEN_MASK_7
 +set_int_param FP_A, 10
 +set_int_param FP_B, 28
 +set_int_param FP_C, 8
-+set_int_param FP_DT, 1
 
 +set_int_param FP_SCALE_Y, 25
 +set_int_param FP_OFFSET_X, 160
@@ -278,18 +276,26 @@ ldy#> FP_C
 jsr MOVMF
 
 
+; normally we would multiply delta-time (dt, e.g. 0.01)
+; to our differential equation results to get the next
+; X/Y/Z values. We can save a multiplication here if we
+; assume that we approximate 0.01 by shifting the float
+; exponent to the right.
+;
+; Some approximate values:
+; - 1/(2**8) = 0.0039..
+; - 1/(2**7) = 0.0078..
+; - 1/(2**6) = 0.0156..
+;
+; So we just define the shift amount to set our dt.
+!set dt_shift = 6
 
-; initialize FP_DT to 0.01
-+set_int_param FP_TEMP, 100
-lda#< FP_TEMP
-ldy#> FP_TEMP
-jsr MOVFM
-lda#< FP_DT
-ldy#> FP_DT
-jsr FDIV
-ldx#< FP_DT
-ldy#> FP_DT
-jsr MOVMF
+!macro multiply_dt_to_fac1 {
+    clc
+    lda $61
+    sbc #dt_shift
+    sta $61
+}
 
 
 ; testing operation order of FSUB
@@ -344,9 +350,7 @@ xyz_step
     ldy#> FP_A
     jsr FMULT
     ; 3. FAC1 * dt
-    lda#< FP_DT
-    ldy#> FP_DT
-    jsr FMULT
+    +multiply_dt_to_fac1
     ; 4. FAC1 + X_cur
     lda#< FP_XCUR
     ldy#> FP_XCUR
@@ -395,7 +399,7 @@ xyz_step
     +float_to_fac1 FP_YCUR
     jsr FSUBT
     ; FAC1 * dt
-    +fmult FP_DT
+    +multiply_dt_to_fac1
     ; FAC1 + Y_cur
     +fadd FP_YCUR
     ; Y_cur = FAC1
@@ -419,7 +423,7 @@ xyz_step
     +float_to_fac1 FP_TEMP
     jsr FSUBT
     ; 4. FAC1 * dt
-    +fmult FP_DT
+    +multiply_dt_to_fac1
     ; 5. FAC1 + Z_cur
     +fadd FP_ZCUR
     ; 6. Z_cur = FAC1
