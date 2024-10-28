@@ -99,7 +99,6 @@ clearscr_loop
 !addr FP_TEMP     = $C550
 !addr FP_SCALE_Y  = $C560
 !addr FP_OFFSET_X = $C570
-!addr FP_SCALE_X  = $C580
 
 !addr INT_X = $C600
 !addr INT_Y = $C602
@@ -265,7 +264,6 @@ sta SCREEN_MASK_7
 
 +set_int_param FP_SCALE_Y, 25
 +set_int_param FP_OFFSET_X, 160
-+set_int_param FP_SCALE_X, 8 ; todo optimize by shifting exp. directly
 
 ; initialize FP_C = 8/3
 +set_int_param FP_TEMP, 3
@@ -360,14 +358,22 @@ xyz_step
 
 
 
-
     ; store int(fp_x) as X coordinate
-    ;lda $61
-    ;adc #3
-    ;sta $61
-    lda #< FP_SCALE_X
-    ldy #> FP_SCALE_X
-    jsr FMULT
+    ;
+    ; we're multiplying X_CUR by 8 but
+    ; we don't really multiply, we just
+    ; add 3 to the float's exponent.
+    ;
+    ; original code:
+    ;!+set_int_param FP_SCALE_X, 8
+    ;[...]
+    ;lda #< FP_SCALE_X
+    ;ldy #> FP_SCALE_X
+    ;jsr FMULT
+    clc
+    lda #3
+    adc $61
+    sta $61
     lda #< FP_OFFSET_X
     ldy #> FP_OFFSET_X
     jsr FADD
