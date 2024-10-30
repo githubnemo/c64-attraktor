@@ -1,6 +1,9 @@
-;*=$1000
 *=$0801
 
+sysline:
+    !byte $0b,$08,$01,$00,$9e,$32,$30,$36,$31,$00,$00,$00 ;= SYS 2061
+
+* = $080d ;=2061
 
 ; set screencolor and border to black (0)
 
