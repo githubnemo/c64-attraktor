@@ -66,7 +66,7 @@ clearscr_loop
    dey
    bne clearscr_loop
    inc$fc
-   ldy#$ff
+   ldy#$00
    dex
    bne clearscr_loop
 
