@@ -14,21 +14,31 @@
 * = $0900
 
 			lda #$00
-			sta $d020
-			sta $d021
+			sta $d020       ; init black border
+			sta $d021       ; and black infill
 			lda #$00
 			jsr musicinit	; init music
-			jsr $e544
-			sei
+			jsr $e544       ; clear screen routine
+			sei             ; disable interrupts
 			lda #<irq1
-			sta $0314
-			lda #>irq1
-			sta $0315
+			sta $0314       ;
+			lda #>irq1      ;
+			sta $0315       ; fill interrupt table entry
+
+            ; VIC-II can generate interrupts, these have to be enabled
+            ; and, once on occurs, a the bit in the interrupt latch
+            ; register ($d019) needs to be cleared.
+            ;
+            ; $d01a is the interrupt enable register - a bit in the
+            ; first 4 bits will enable one of the 4 interrupts.
+            ;
+            ; here we will enable the 'reached certain raster line' (RST)
+            ; interrupt. The raster line is stored in $d012 and $d011.
 			asl $d019
 			lda #$7b
 			sta $dc0d
 			lda #$81
-			sta $d01a
+			sta $d01a       ; write to VIC-II interrupt register
 			lda #$1b
 			sta $d011
 			lda #$80
@@ -37,7 +47,7 @@
 this:	jmp this
 //----------------------------------------------------------
 irq1:
-			asl $d019
+			asl $d019          ; clear latch bit of RST interrupt
 			+SetBorderColor 2
 			lda $d012
 			sta timer
@@ -47,7 +57,7 @@ irq1:
 			sbc timer
 			clc
 			adc #$30
-			cmp $0400
+			cmp $0400          ; read first 'character' of screen memory
 			bcc notbigger
 			sta $0400
 notbigger:
@@ -57,7 +67,7 @@ notbigger:
 			pla
 			tax
 			pla
-			rti
+			rti ; restore Y, X, A and return from interrupt
 
 timer
     !byte $00
@@ -121,19 +131,23 @@ hardrestartindex:		;value to put into wave in hardrestartframes (from right to l
 
 
 
-init:		ldy #$18		//clear the sid
+; this code initializes the SID memory starting at $d400.
+;
+; SID has 3 configurable voices which are initialized here.
+;
+init:	ldy #$18		; clear the sid
 		lda #$00
-loop1:		sta $d400,y
+loop1:	sta $d400,y
 		dey
 		bpl loop1
 		ldy #$0e
-		ldx #$02
-loop2:		lda pulseinit,x		//pulsehigh ???
+		ldx #$02        ; x = voice index
+loop2:  lda pulseinit,x	; pulsehigh ???
 		sta $d403,y
 		lda waveinit,x
-		sta $d404,y		//wave
+		sta $d404,y		; wave
 		lda #$00
-		sta $d405,y		//attack
+		sta $d405,y		; attack
 		lda #$01
 		sta duration1,x
 		lda voiceinit,x
@@ -149,14 +163,32 @@ loop2:		lda pulseinit,x		//pulsehigh ???
 		dex
 		bpl loop2
 		rts
-pulseinit:					//?
+
+; initial pulse wave duty cycles for each voice
+;
+pulseinit:
 !byte $08,$03,$03
+
+; initial wave form for each voice
+;
+; bit  desc.
+; 7    noise
+; 6    pulse
+; 5    sawtooth
+; 4    triangle
+; 3    test
+; 2    ring modulation with voice N (1:3, 2:1, 3:1)
+; 1    sync with voice N (1:3, 2:1, 3:1)
+; 0    gate
+;
 waveinit:
 !byte $08,$08,$08
+
 voiceinit:
 !word voice1
 !word voice2
 !word voice3
+
 voiceloop:
 !word voice1loop
 !word voice2loop
@@ -165,7 +197,7 @@ voiceloop:
 sidvalues:
 !byte $00,$f4,$1f
 
-play:		ldx #$00
+play:	ldx #$00
 		dec duration1
 		beq branch1
 		lda duration1
