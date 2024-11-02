@@ -293,7 +293,7 @@ loop3:
 		lda #$08
 		sta CONTROL_VOICE1
 		sta CONTROL_VOICE2
-		sta CONTROL_VOICE3
+		sta CONTROL_VOICE3  ; set all voices to 'test'?
 		rts
 
 branch2:ldy sound1index
@@ -307,21 +307,21 @@ branch2:ldy sound1index
 		sty sound1index
 branch1109:
         dec duration3		//voice3
-		beq branch111c
+		beq fill_voice_3
 		lda duration3
 		cmp #hardrestartcounter
 		bcs branch1151
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
-		jmp branch1185
-branch111c:
+		jmp sub_fill_voice_2
+fill_voice_3:
         ldy #$00
 		lda (voice3pointer),y
 		sta sound3pointer
 		iny
 		lda (voice3pointer),y
-		sta sound3pointer+1
+		sta sound3pointer+1 ; (uint16_t)sound3pointer = (uint16_t)voice3pointer
 		iny
 		lda (voice3pointer),y
 		sta duration3
@@ -337,25 +337,28 @@ branch111c:
 		sta voice3pointer+1
 		ldy #$00
 		lda (sound3pointer),y
-		sta $d414		//sr
-		sty $d413		//ad
+		sta SUSTAIN_REL_VOICE3		//sr
+		sty ATTACK_DUR_VOICE3		//ad
 		iny
-		sty $d412		//wave
+		sty CONTROL_VOICE3          ; sync with voice 1
 		sty sound3index
-		jmp branch1185
+		jmp sub_fill_voice_2
 
-branch1151:	ldy sound3index
+branch1151:
+        ldy sound3index
 		lda (sound3pointer),y
 		beq branch115e
 		cmp #$ff
 		bne branch1166
-		jmp branch1185
-branch115e:	iny
+		jmp sub_fill_voice_2
+branch115e:
+        iny
 		lda (sound3pointer),y
 		sta sound3index
 		tay
 		lda (sound3pointer),y
-branch1166:	sta $d416		//filter
+branch1166:
+        sta $d416		//filter
 		iny
 		lda (sound3pointer),y
 		sta $d412		//wave
@@ -370,9 +373,9 @@ branch1166:	sta $d416		//filter
 		sta $d40f
 		lda freqlo,y
 		sta $d40e
-branch1185:
+sub_fill_voice_2:
         dec duration2			//voice2
-		beq branch1196
+		beq fill_voice_2
 		lda duration2
 		cmp #hardrestartcounter
 		bcs branch11da
@@ -380,7 +383,7 @@ branch1185:
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-branch1196:	ldy #$00
+fill_voice_2:	ldy #$00
 		lda (voice2pointer),y
 		sta sound2pointer
 		iny
@@ -451,11 +454,11 @@ branch1200:	iny
 		iny
 		clc
 		adc (vibratopointer),y
-		sta $d407
+		sta FREQ_LO_VOICE2
 		dey
 		lda freqhi,x
 		adc (vibratopointer),y
-		sta $d408
+		sta FREQ_HI_VOICE2
 		iny
 		iny
 		lda (vibratopointer),y
@@ -467,9 +470,10 @@ branch122a:	iny
 		lda (vibratopointer),y
 		sta vibratoindex
 		rts
-branch1230:	sta $d407		//obsolete ?
+branch1230:
+        sta FREQ_LO_VOICE2		//obsolete ?
 		lda freqhi,x
-		sta $d408
+		sta FREQ_LO_VOICE2
 		rts
 
 
