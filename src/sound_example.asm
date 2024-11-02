@@ -226,6 +226,8 @@ sidvalues:
 !addr CONTROL_VOICE1 = $d404
 !addr ATTACK_DUR_VOICE1 = $d405
 !addr SUSTAIN_REL_VOICE1 = $d406
+!addr WAV_DUTY_LO_VOICE1 = $d402
+!addr WAV_DUTY_HI_VOICE1 = $d403
 
 !addr FREQ_LO_VOICE2 = $d407
 !addr FREQ_HI_VOICE2 = $d408
@@ -239,26 +241,28 @@ sidvalues:
 !addr ATTACK_DUR_VOICE3 = $d413
 !addr SUSTAIN_REL_VOICE3 = $d414
 
+!addr FILTER_CUTOFF_HI = $d416
+!addr FILTER_CUTOFF_LO = $d415
 
 play:
         ldx #$00
 		dec duration1
-		beq branch1
+		beq fill_voice_1             ; once voice 1 is finished, fill in new data
 		lda duration1
 		cmp #hardrestartcounter
-		bcs branch2
+		bcs branch2                  ; branch to branch2 if duration1 > restartcounter
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		jmp branch1109
 
-branch1:
+fill_voice_1:
         ldy #$00			//voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
 		lda (voice1pointer),y
-		beq restartmusic
+		beq restartmusic       ; detects $0000 in voice1list
 		sta sound1pointer+1
 		iny
 		lda (voice1pointer),y
