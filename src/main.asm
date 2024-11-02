@@ -5,43 +5,47 @@ sysline:
 
 * = $080d ;=2061
 
-; set screencolor and border to black (0)
+!macro SetBorderColor .color {
+	lda #.color
+	sta $d020
+}
+
 
 start
+    +SetBorderColor 0
+    sta$d021        ; infill color to black as well
 
-   lda#$00
-   sta$d020
-   sta$d021        ; black border + screen
+    lda#$02
+    sta$0400        ; draw B
 
-   lda#$02
-   sta$0400        ; draw B
+    ; setup sound
 
-   ; enable 'high-res' bitmap mode; this gives us 320x200 pixel (=64000)
-   ; in graphics memory but only 40x25 (=1000) bytes for color.
-   lda$d011        ; set BMM=1
-   ora#0b00100000
-   sta$d011
-   lda$d016        ; unset MCM
-   and#0b11101111
-   sta$d016
+    ; enable 'high-res' bitmap mode; this gives us 320x200 pixel (=64000)
+    ; in graphics memory but only 40x25 (=1000) bytes for color.
+    lda$d011        ; set BMM=1
+    ora#0b00100000
+    sta$d011
+    lda$d016        ; unset MCM
+    and#0b11101111
+    sta$d016
 
-   lda$d018
-   ora#0b00001000
-   sta$d018        ; move graphics to $2000 instead of $1000
+    lda$d018
+    ora#0b00001000
+    sta$d018        ; move graphics to $2000 instead of $1000
 
 
-   ; colors are defined for 8x8 pixels at once, upper nibble for 'on' pixels.
-   ; for simplicity we'll fill all 40x25 byte with white for on-pixels and
-   ; black for off-pixels.
-   ldx#$00
-   lda#0b01010000
+    ; colors are defined for 8x8 pixels at once, upper nibble for 'on' pixels.
+    ; for simplicity we'll fill all 40x25 byte with white for on-pixels and
+    ; black for off-pixels.
+    ldx#$00
+    lda#0b01010000
 colorfill_loop
-   sta$0400,x
-   sta$0500,x
-   sta$0600,x
-   sta$0700,x
-   dex
-   bne colorfill_loop
+    sta$0400,x
+    sta$0500,x
+    sta$0600,x
+    sta$0700,x
+    dex
+    bne colorfill_loop
 
 
    ; overwrite all pixels with 0 to blank the screen
