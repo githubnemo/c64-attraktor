@@ -155,7 +155,7 @@ loop2:  lda pulseinit,x	; pulsehigh ???
 		lda voiceinit+3,x
 		sta voice1pointer+3,x
 		lda sidvalues,x
-		sta $d416,x
+		sta $d416,x     ; set filter cutoff, resonance and mode / main volume
 		tya
 		sec
 		sbc #$07
@@ -194,6 +194,22 @@ voiceloop:
 !word voice2loop
 !word voice3loop
 
+; global filter and main volume config for
+; register $d416, $d417 and $d418
+;
+; $d416: filter cutoff freq high byte (bits $d415:{3..0} are the low byte)
+; $d417: filter resonance and routing config
+;   7..4: filter resonance
+;      3: external input into filter
+;      2: voice 3 into filter?
+;      1: voice 2 into filter?
+;      0: voice 1 into filter?
+; $d418: filter mode and main volume control
+;      7: mute voice 3
+;      6: high pass
+;      5: band pass
+;      4: low pass
+;   3..0: main volume
 sidvalues:
 !byte $00,$f4,$1f
 
@@ -208,7 +224,7 @@ play:	ldx #$00
 		stx $d404
 		jmp branch1109
 
-branch1:	ldy #$00			//voice1
+branch1:ldy #$00			//voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
@@ -258,7 +274,8 @@ branch2:ldy sound1index
 		sta $d404
 		iny
 		sty sound1index
-branch1109:	dec duration3		//voice3
+branch1109:
+        dec duration3		//voice3
 		beq branch111c
 		lda duration3
 		cmp #hardrestartcounter
@@ -267,7 +284,8 @@ branch1109:	dec duration3		//voice3
 		stx $d406
 		stx $d404
 		jmp branch1185
-branch111c:	ldy #$00
+branch111c:
+        ldy #$00
 		lda (voice3pointer),y
 		sta sound3pointer
 		iny
