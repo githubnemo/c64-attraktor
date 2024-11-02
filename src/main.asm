@@ -16,9 +16,35 @@ start
     sta$d021        ; infill color to black as well
 
     lda#$02
-    sta$0400        ; draw B
+    sta$0400        ; draw 'B'
 
     ; setup sound
+    jsr init_sid
+    sei                ; disable interrupts
+    lda #<vic_rst_irq
+    sta $0314          ;
+    lda #>vic_rst_irq  ;
+    sta $0315          ; fill interrupt table entry for VIC-II RST interrupt
+    ; VIC-II can generate interrupts, these have to be enabled
+    ; and, once on occurs, a the bit in the interrupt latch
+    ; register ($d019) needs to be cleared.
+    ;
+    ; $d01a is the interrupt enable register - a bit in the
+    ; first 4 bits will enable one of the 4 interrupts.
+    ;
+    ; here we will enable the 'reached certain raster line' (RST)
+    ; interrupt. The raster line is stored in $d012 and $d011.
+    asl $d019
+    lda #$7b
+    sta $dc0d
+    lda #$81
+    sta $d01a       ; write to VIC-II interrupt register
+    lda #$1b
+    sta $d011
+    lda #$80
+    sta $d012
+    cli             ; enable interrupts
+
 
     ; enable 'high-res' bitmap mode; this gives us 320x200 pixel (=64000)
     ; in graphics memory but only 40x25 (=1000) bytes for color.
@@ -595,7 +621,339 @@ _y_shift_local
     rts
 
 
+!addr SID_MEMORY_START = $d400
 
+!addr FREQ_LO_VOICE1 = $d400
+!addr FREQ_HI_VOICE1 = $d401
+!addr CONTROL_VOICE1 = $d404
+!addr ATTACK_DUR_VOICE1 = $d405
+!addr SUSTAIN_REL_VOICE1 = $d406
+!addr WAV_DUTY_LO_VOICE1 = $d402
+!addr WAV_DUTY_HI_VOICE1 = $d403
+
+!addr FREQ_LO_VOICE2 = $d407
+!addr FREQ_HI_VOICE2 = $d408
+!addr CONTROL_VOICE2 = $d40b
+!addr ATTACK_DUR_VOICE2 = $d40c
+!addr SUSTAIN_REL_VOICE2 = $d40d
+
+!addr FREQ_LO_VOICE3 = $d40e
+!addr FREQ_HI_VOICE3 = $d40f
+!addr CONTROL_VOICE3 = $d412
+!addr ATTACK_DUR_VOICE3 = $d413
+!addr SUSTAIN_REL_VOICE3 = $d414
+
+!addr FILTER_CUTOFF_HI = $d416
+!addr FILTER_CUTOFF_LO = $d415
+
+
+; initial pulse wave duty cycles for each voice
+;
+pulseinit
+    !byte $08,$03,$03
+
+
+; initial wave form for each voice
+;
+; bit  desc.
+; 7    noise
+; 6    pulse
+; 5    sawtooth
+; 4    triangle
+; 3    test
+; 2    ring modulation with voice N (1:3, 2:1, 3:1)
+; 1    sync with voice N (1:3, 2:1, 3:1)
+; 0    gate
+;
+waveinit
+    !byte $08,$08,$08
+
+
+voiceinit
+    !word voice1
+    !word voice2
+    !word voice3
+
+
+voiceloop
+    !word voice1loop
+    !word voice2loop
+    !word voice3loop
+
+
+; initial pulse wave duty cycles for each voice
+;
+init_values_pulse
+    !byte $08,$03,$03
+
+
+; initial wave form for each voice
+;
+; bit  desc.
+; 7    noise
+; 6    pulse
+; 5    sawtooth
+; 4    triangle
+; 3    test
+; 2    ring modulation with voice N (1:3, 2:1, 3:1)
+; 1    sync with voice N (1:3, 2:1, 3:1)
+; 0    gate
+;
+init_values_wave
+    !byte $08,$08,$08
+
+play_durations
+play_duration_voice1
+    !byte $01
+play_duration_voice2
+    !byte $01
+play_duration_voice3
+    !byte $01
+
+; zero page variables for pointers to sounds
+!addr voice1_ptr = $30
+!addr voice2_ptr = $32
+!addr voice3_ptr = $34
+
+!addr sound_ptr = $36
+
+; global filter and main volume config for
+; register $d416, $d417 and $d418
+;
+; $d416: filter cutoff freq high byte (bits $d415:{3..0} are the low byte)
+; $d417: filter resonance and routing config
+;   7..4: filter resonance
+;      3: external input into filter
+;      2: voice 3 into filter?
+;      1: voice 2 into filter?
+;      0: voice 1 into filter?
+; $d418: filter mode and main volume control
+;      7: mute voice 3
+;      6: high pass
+;      5: band pass
+;      4: low pass
+;   3..0: main volume
+init_values_sid
+    !byte $00,$f4,$1f
+
+
+; this code initializes the SID memory starting at $d400.
+;
+; SID has 3 configurable voices which are initialized here.
+;
+!zone init_sid {
+init_sid
+    ldy #$18
+    lda #$00
+.loop1
+    sta SID_MEMORY_START,y
+    dey
+    bpl .loop1      ; clear the SID memory with zeroes
+
+    ; populate voice settings with sensible values
+    ;
+    ldy #$0e        ; y = voice offset in SID memory
+    ldx #$02        ; x = voice index
+.loop2
+    lda init_values_pulse,x
+    sta WAV_DUTY_HI_VOICE1,y
+
+    lda init_values_wave,x
+    sta CONTROL_VOICE1,y
+
+    lda #$00
+    sta ATTACK_DUR_VOICE1,y
+    sta play_durations,x    ; reset play durations as well in case of program
+                            ; restarts without rebooting the machine
+
+    lda voiceinit,x
+    sta voice1_ptr,x
+    lda voiceinit+1,x
+    sta voice1_ptr+1,x
+
+    lda init_values_sid,x
+    sta FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
+                            ; abuses x for writing several bytes but does not
+                            ; depend on a voice (is a global setting)
+    tya
+    sec
+    sbc #$07
+    tay
+    dex
+    bpl .loop2
+    rts
+}
+
+
+!zone play_sounds {
+play_sounds
+    dec play_duration_voice1
+    beq .fill_voice1
+
+    ; stop playing stuff once duration of voice1 is 0 after fill
+    lda play_duration_voice1
+    beq .restart
+    rts
+
+.fill_voice1
+    ldy #0
+    lda (voice1_ptr), y
+    sta sound_ptr, y
+    iny
+    lda (voice1_ptr), y
+    sta sound_ptr, y
+    iny
+    lda (voice1_ptr), y
+    sta play_duration_voice1
+
+    lda voiceinit,x
+    sta voice1_ptr,x
+    lda voiceinit+1,x
+    sta voice1_ptr+1,x  ; reset pointers to initial positions
+
+    inc voice1_ptr
+    inc voice1_ptr
+
+
+.restart:
+    ldx #$02
+.restart_loop:
+    lda #$01
+    sta play_durations,x
+
+    dex
+    bpl .restart_loop
+    lda #$08
+    sta CONTROL_VOICE1
+    sta CONTROL_VOICE2
+    sta CONTROL_VOICE3  ; set all voices to 'test'?
+    rts
+}
+
+
+vic_rst_irq
+    asl $d019          ; clear latch bit of RST interrupt
+    +SetBorderColor 2
+
+    ; call musicplay while saving the raster line before the call
+    ; and subtracting the current raster line after the call to get
+    ; the elapsed time (in elapsed raster lines) to plot it on the
+    ; screen. as an additional effect we also change the background
+    ; color for the 'processing' lines.
+    lda $d012
+    sta timer
+    ;jsr musicplay ; play music
+    lda $d012
+    sec
+    sbc timer
+    clc
+    adc #$30
+    cmp $0400          ; read first 'character' of screen memory
+    bcc notbigger
+    sta $0400
+notbigger
+    +SetBorderColor 0
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti ; restore Y, X, A and return from interrupt
+
+timer
+    !byte 0
+
+
+; ------------------------------------------------------------
+; instrument data
+;
+; format voice1 (Drumtrack):
+; .byte SR Value
+; .byte Freqhi,wave
+; .byte Freqhi,wave - if freqhi=0 -> end of sound
+
+basedrum:
+!byte $f7,$dd,$81,$0c,$11,$0a,$11,$08,$11,$06,$10,$03,$10,$00
+
+snare:
+!byte $f9,$fc,$81,$0e,$41,$5c,$81,$0d,$40,$80,$3c,$0a,$40,$3b,$80,$00
+
+hihat:
+!byte $84,$fe,$81,$d0,$80,$a0,$80,$00
+
+
+; ------------------------------------------------------------
+; format voice2 (vibratotrack):
+; first frame
+; .byte SR Value
+; .byte pulsecontrol    =$0 -> pulse off, other -> pulse on
+; .word vibratooffset
+; following frames
+; .byte wave		=$0 -> next byte is loopindex, =$FF -> end
+; .byte noteoffset
+; if pulse = on
+; .byte wave,pulselow,pulsehigh,noteoffset
+
+silence_voice2
+    !byte $00,$00
+    !word novibrato
+    !byte $08,$00,$ff
+
+; ------------------------------------------------------------
+; format voice3 (filtertrack):
+; first frame
+; !byte SR Value
+; following frames
+; !byte Filterhigh,wave,noteoffset
+; note: if filterhigh=$00, next byte is loopindex. if filterhigh=$ff ->end
+
+silence_voice3
+    !byte $00
+    !byte $fe,$08,$00
+    !byte $ff
+
+filterbass
+    !byte $b9
+    !byte $f0,$41,$00
+    !byte $a0,$41,$00
+    !byte $50,$41,$00
+    !byte $20,$41,$00
+    !byte $18,$41,$01
+    !byte $14,$41,$00
+    !byte $10,$41,$00
+    !byte $0c,$40,$ff
+    !byte $08,$40,$00
+    !byte $ff
+
+; ------------------------------------------------------------
+; vibratotable
+; .byte addvalue-high,addvalue-low	if highbyte=$80 -> next byte=loopindex
+
+novibrato
+    !byte $00,$00,$80,$00
+
+
+
+voice1
+voice1loop
+    !word basedrum
+    !byte $0c
+    !word hihat
+    !byte $06
+    !word snare
+    !byte $0c
+    !word $0000 ;
+    !byte $00   ; EOL
+
+voice2
+voice2loop
+    !word silence_voice2
+    !byte $0c,$00
+
+voice3
+voice3loop
+    !word silence_voice3
+    !byte $1e,$00
 
 
 ; vim:ft=acme
