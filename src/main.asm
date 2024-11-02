@@ -13,6 +13,14 @@
 //----------------------------------------------------------
 * = $0900
 
+; setup an interrupt so that we have a defined time at which to
+; control the music. to avoid timing differences this point in
+; time should be constant. here we choose a display processor
+; (VIC-II) interrupt for a certain raster line as a target.
+; this has the added benefit that we can observe how much time
+; we take to process the music (if we color the lines we occupy
+; while computing the interrupt handler).
+
 			lda #$00
 			sta $d020       ; init black border
 			sta $d021       ; and black infill
@@ -129,7 +137,7 @@ hardrestartindex:		;value to put into wave in hardrestartframes (from right to l
 !set vibratoindex=i
 
 
-
+!addr SID_MEMORY_START = $d400
 
 ; this code initializes the SID memory starting at $d400.
 ;
@@ -137,7 +145,7 @@ hardrestartindex:		;value to put into wave in hardrestartframes (from right to l
 ;
 init:	ldy #$18		; clear the sid
 		lda #$00
-loop1:	sta $d400,y
+loop1:	sta SID_MEMORY_START,y
 		dey
 		bpl loop1
 		ldy #$0e
@@ -213,18 +221,39 @@ voiceloop:
 sidvalues:
 !byte $00,$f4,$1f
 
-play:	ldx #$00
+!addr FREQ_LO_VOICE1 = $d400
+!addr FREQ_HI_VOICE1 = $d401
+!addr CONTROL_VOICE1 = $d404
+!addr ATTACK_DUR_VOICE1 = $d405
+!addr SUSTAIN_REL_VOICE1 = $d406
+
+!addr FREQ_LO_VOICE2 = $d407
+!addr FREQ_HI_VOICE2 = $d408
+!addr CONTROL_VOICE2 = $d40b
+!addr ATTACK_DUR_VOICE2 = $d40c
+!addr SUSTAIN_REL_VOICE2 = $d40d
+
+!addr FREQ_LO_VOICE3 = $d40e
+!addr FREQ_HI_VOICE3 = $d40f
+!addr CONTROL_VOICE3 = $d412
+!addr ATTACK_DUR_VOICE3 = $d413
+!addr SUSTAIN_REL_VOICE3 = $d414
+
+
+play:
+        ldx #$00
 		dec duration1
 		beq branch1
 		lda duration1
 		cmp #hardrestartcounter
 		bcs branch2
-		stx $d405
-		stx $d406
-		stx $d404
+		stx ATTACK_DUR_VOICE1
+		stx SUSTAIN_REL_VOICE1
+		stx CONTROL_VOICE1
 		jmp branch1109
 
-branch1:ldy #$00			//voice1
+branch1:
+        ldy #$00			//voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
@@ -243,15 +272,17 @@ branch1:ldy #$00			//voice1
 		sta voice1pointer+1
 		ldy #$00
 		lda (sound1pointer),y
-		sta $d406
-		sty $d405
+		sta SUSTAIN_REL_VOICE1
+		sty ATTACK_DUR_VOICE1
 		iny
-		sty $d404
+		sty CONTROL_VOICE1
 		sty sound1index
 		jmp branch1109
 
-restartmusic:	ldx #$02
-loop3:		lda voiceloop,x
+restartmusic:
+        ldx #$02
+loop3:
+        lda voiceloop,x
 		sta voice1pointer,x
 		lda voiceloop+3,x
 		sta voice1pointer+3,x
@@ -260,18 +291,18 @@ loop3:		lda voiceloop,x
 		dex
 		bpl loop3
 		lda #$08
-		sta $d404
-		sta $d40b
-		sta $d412
+		sta CONTROL_VOICE1
+		sta CONTROL_VOICE2
+		sta CONTROL_VOICE3
 		rts
 
 branch2:ldy sound1index
 		lda (sound1pointer),y
 		beq branch1109
-		sta $d401
+		sta FREQ_HI_VOICE1
 		iny
 		lda (sound1pointer),y
-		sta $d404
+		sta CONTROL_VOICE1
 		iny
 		sty sound1index
 branch1109:
@@ -280,9 +311,9 @@ branch1109:
 		lda duration3
 		cmp #hardrestartcounter
 		bcs branch1151
-		stx $d405
-		stx $d406
-		stx $d404
+		stx ATTACK_DUR_VOICE1
+		stx SUSTAIN_REL_VOICE1
+		stx CONTROL_VOICE1
 		jmp branch1185
 branch111c:
         ldy #$00
@@ -339,14 +370,15 @@ branch1166:	sta $d416		//filter
 		sta $d40f
 		lda freqlo,y
 		sta $d40e
-branch1185:	dec duration2			//voice2
+branch1185:
+        dec duration2			//voice2
 		beq branch1196
 		lda duration2
 		cmp #hardrestartcounter
 		bcs branch11da
-		stx $d405
-		stx $d406
-		stx $d404
+		stx ATTACK_DUR_VOICE1
+		stx SUSTAIN_REL_VOICE1
+		stx CONTROL_VOICE1
 		rts
 branch1196:	ldy #$00
 		lda (voice2pointer),y
@@ -370,10 +402,10 @@ branch1196:	ldy #$00
 		ldy #$00
 		sty vibratoindex
 		lda (sound2pointer),y
-		sta $d40d		//sr
-		sty $d40c		//ad
+		sta SUSTAIN_REL_VOICE2		//sr
+		sty ATTACK_DUR_VOICE2		//ad
 		iny
-		sty $d40b		//wave
+		sty CONTROL_VOICE2		//wave
 		lda (sound2pointer),y
 		sta pulsecontrol
 		iny
