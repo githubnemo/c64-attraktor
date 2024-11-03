@@ -647,28 +647,6 @@ _y_shift_local
 !addr FILTER_CUTOFF_LO = $d415
 
 
-; initial pulse wave duty cycles for each voice
-;
-pulseinit
-    !byte $08,$03,$03
-
-
-; initial wave form for each voice
-;
-; bit  desc.
-; 7    noise
-; 6    pulse
-; 5    sawtooth
-; 4    triangle
-; 3    test
-; 2    ring modulation with voice N (1:3, 2:1, 3:1)
-; 1    sync with voice N (1:3, 2:1, 3:1)
-; 0    gate
-;
-waveinit
-    !byte $08,$08,$08
-
-
 voiceinit
     !word voice1
     !word voice2
@@ -716,6 +694,7 @@ play_duration_voice3
 !addr voice3_ptr = $34
 
 !addr sound_ptr = $36
+!addr sound_idx = $38
 
 ; global filter and main volume config for
 ; register $d416, $d417 and $d418
@@ -763,13 +742,15 @@ init_sid
 
     lda #$00
     sta ATTACK_DUR_VOICE1,y
+
+    lda #$01
     sta play_durations,x    ; reset play durations as well in case of program
                             ; restarts without rebooting the machine
 
     lda voiceinit,x
     sta voice1_ptr,x
-    lda voiceinit+1,x
-    sta voice1_ptr+1,x
+    lda voiceinit+3,x
+    sta voice1_ptr+3,x
 
     lda init_values_sid,x
     sta FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
@@ -788,14 +769,29 @@ init_sid
 !zone play_sounds {
 play_sounds
     dec play_duration_voice1
-    beq .fill_voice1
+    beq .advance_loop_voice1
+    .return_advance_loop_voice1
 
     ; stop playing stuff once duration of voice1 is 0 after fill
     lda play_duration_voice1
-    beq .restart
+    beq .restart ; returns
+
+    jsr .play_sound_voice1
     rts
 
-.fill_voice1
+.play_sound_voice1
+    ldy sound_idx
+
+    lda (sound_ptr), y
+    sta FREQ_HI_VOICE1
+    iny
+    lda (sound_ptr), y
+    sta CONTROL_VOICE1
+    iny
+    sty sound_idx
+    rts
+
+.advance_loop_voice1
     ldy #0
     lda (voice1_ptr), y
     sta sound_ptr, y
@@ -806,13 +802,19 @@ play_sounds
     lda (voice1_ptr), y
     sta play_duration_voice1
 
-    lda voiceinit,x
-    sta voice1_ptr,x
-    lda voiceinit+1,x
-    sta voice1_ptr+1,x  ; reset pointers to initial positions
+    inc voice1_ptr
+    inc voice1_ptr
+    inc voice1_ptr ; move pointer to next entry in loop list
 
-    inc voice1_ptr
-    inc voice1_ptr
+    ; read first byte as sustain/release value
+    ldy #0
+    lda (sound_ptr), y
+    sta SUSTAIN_REL_VOICE1
+    sty ATTACK_DUR_VOICE1
+    iny
+    sty CONTROL_VOICE1
+    sty sound_idx
+    jmp .return_advance_loop_voice1
 
 
 .restart:
@@ -820,6 +822,11 @@ play_sounds
 .restart_loop:
     lda #$01
     sta play_durations,x
+
+    lda voiceinit,x
+    sta voice1_ptr,x
+    lda voiceinit+3,x
+    sta voice1_ptr+3,x
 
     dex
     bpl .restart_loop
@@ -842,15 +849,15 @@ vic_rst_irq
     ; color for the 'processing' lines.
     lda $d012
     sta timer
-    ;jsr musicplay ; play music
+    jsr play_sounds
     lda $d012
     sec
     sbc timer
     clc
     adc #$30
-    cmp $0400          ; read first 'character' of screen memory
+    cmp $0401          ; read first 'character' of screen memory
     bcc notbigger
-    sta $0400
+    sta $0401
 notbigger
     +SetBorderColor 0
     pla
@@ -933,15 +940,23 @@ novibrato
     !byte $00,$00,$80,$00
 
 
-
+; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
+;
 voice1
 voice1loop
     !word basedrum
     !byte $0c
     !word hihat
     !byte $06
+    !word hihat
+    !byte $06
     !word snare
     !byte $0c
+    !word hihat
+    !byte $06
+    !word hihat
+    !byte $06
+
     !word $0000 ;
     !byte $00   ; EOL
 
