@@ -768,6 +768,20 @@ init_sid
 
 !zone play_sounds {
 play_sounds
+    lda #$ff
+    sta $DC02
+    lda #$00
+    sta $DC03
+
+    lda #0b11101111
+    sta $DC00
+
+    lda $DC01
+    and #0b00010000
+    bne .no_key
+
+
+
     dec play_duration_voice1
     beq .advance_loop_voice1
     .return_advance_loop_voice1
@@ -777,6 +791,7 @@ play_sounds
     beq .restart ; returns
 
     jsr .play_sound_voice1
+.no_key
     rts
 
 .play_sound_voice1
