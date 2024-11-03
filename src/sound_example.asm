@@ -253,7 +253,7 @@ play:
 		bcs branch2                  ; branch to branch2 if duration1 > restartcounter
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
-		stx CONTROL_VOICE1
+		stx CONTROL_VOICE1           ; reset voice1 to 0
 		jmp branch1109
 
 fill_voice_1:
@@ -300,7 +300,8 @@ loop3:
 		sta CONTROL_VOICE3  ; set all voices to 'test'?
 		rts
 
-branch2:ldy sound1index
+branch2:
+        ldy sound1index
 		lda (sound1pointer),y
 		beq branch1109
 		sta FREQ_HI_VOICE1
@@ -362,10 +363,10 @@ branch115e:
 		tay
 		lda (sound3pointer),y
 branch1166:
-        sta $d416		//filter
+        sta FILTER_CUTOFF_HI		//filter
 		iny
 		lda (sound3pointer),y
-		sta $d412		//wave
+		sta CONTROL_VOICE3		//wave
 		iny
 		lda (sound3pointer),y
 		iny
@@ -374,9 +375,9 @@ branch1166:
 		adc note3
 		tay
 		lda freqhi,y
-		sta $d40f
+		sta FREQ_HI_VOICE3
 		lda freqlo,y
-		sta $d40e
+		sta FREQ_LO_VOICE3
 sub_fill_voice_2:
         dec duration2			//voice2
 		beq fill_voice_2
@@ -387,7 +388,8 @@ sub_fill_voice_2:
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-fill_voice_2:	ldy #$00
+fill_voice_2:
+        ldy #$00
 		lda (voice2pointer),y
 		sta sound2pointer
 		iny
@@ -437,7 +439,8 @@ branch11e5:	iny
 		lda (sound2pointer),y
 
 
-branch11ed:	sta $d40b		//wave
+branch11ed:
+        sta CONTROL_VOICE2		//wave
 		lda pulsecontrol
 		beq branch1200
 		iny
@@ -517,6 +520,7 @@ freqhi:
 //format voice1 (Drumtrack):
 //.byte SR Value
 //.byte Freqhi,wave
+// [...]
 //.byte Freqhi,wave - if freqhi=0 -> end of sound
 
 basedrum:					//basedrum
