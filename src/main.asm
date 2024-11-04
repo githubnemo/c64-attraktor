@@ -134,6 +134,7 @@ clearscr_loop
 
 !addr INT_X = $C600
 !addr INT_Y = $C602
+!addr INT_M = $C604
 
 !addr SCREEN_ADDR = $C630
 
@@ -497,6 +498,58 @@ xyz_step
     sbc INT_Y
     sta INT_Y
 
+    ; compute l2 norm to get length of X/Y vector
+    ;
+    ; we'd scale X and Y by two but since we use a 16 bit lookup
+    ; table for squared values (sqtable) we'd need to multiply by 2
+    ; to get the correct number (or else we'd get the number of (1/2x)**2.
+    ; so scaling is therefore implicit :)
+    ;
+    ; ; look up INT_X*INT_X in sqtable
+    ; ; basically: INT_M = INT_X**2
+    clc
+    lda INT_X
+    adc <sqtable
+    sta $20
+    lda INT_X+1
+    adc >sqtable
+    sta $21
+    ldy #0
+    lda ($20),y
+    sta INT_M,y
+    iny
+    lda ($20),y
+    sta INT_M,y
+
+    clc
+    lda INT_Y
+    adc <sqtable
+    sta $20
+    lda #0 ; INT_Y+1 is 0 anyway
+    adc >sqtable
+    sta $21
+
+    ; $21,$20 points to INT_Y**2, compute INT_M = INT_M + Y**2
+    clc
+    ldy #0
+    lda ($20), y
+    adc INT_M
+    sta INT_M
+    iny
+    lda ($20), y
+    adc INT_M+1
+    sta INT_M+1
+
+    lda INT_M
+    sta $20
+    lda INT_M+1
+    sta $21
+    jsr sqrt16
+
+    lda $20
+    sta INT_M
+    lda #0
+    sta INT_M+1
 
     rts
 
@@ -619,6 +672,44 @@ _y_shift_local
     sta ($FB), Y
 
     rts
+
+
+!zone sqrt16 {
+; see https://codebase.c64.org/doku.php?id=base:16bit_and_24bit_sqrt
+;
+; sqrt16 of 16 bit number in $21/$20 (HB/LB)
+;
+; 8 bit result is stored in $20
+; remainder is stored in $21
+;
+sqrt16
+	LDY #$01 ; lsby of first odd number = 1
+	STY $22
+	DEY
+	STY $23 ; msby of first odd number (sqrt = 0)
+.again
+	SEC
+	LDA $20 ; save remainder in X register
+	TAX ; subtract odd lo from integer lo
+	SBC $22
+	STA $20
+	LDA $21 ; subtract odd hi from integer hi
+	SBC $23
+	STA $21 ; is subtract result negative?
+	BCC .nomore ; no. increment square root
+	INY
+	LDA $22 ; calculate next odd number
+	ADC #$01
+	STA $22
+	BCC .again
+	INC $23
+	JMP .again
+.nomore
+	STY $20 ; all done, store square root
+	STX $21 ; and remainder
+	RTS
+}
+
 
 
 !addr SID_MEMORY_START = $d400
@@ -984,6 +1075,13 @@ voice3
 voice3loop
     !word silence_voice3
     !byte $1e,$00
+
+
+
+sqtable
+!for n, 0, 255 {
+    !word n*n
+}
 
 
 ; vim:ft=acme

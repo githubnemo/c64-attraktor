@@ -18,7 +18,8 @@ dt = 0.005
 
 points = []
 points_2d = []
-
+norms = []
+norms_approx = []
 
 def plot(x, y, z):
     global points, points_2d
@@ -37,6 +38,28 @@ def plot(x, y, z):
 
     ))
 
+    x_proj = int(x*8 + 160)
+    y_proj = int(u * 25) >> 6
+
+    norms.append(
+        np.sqrt(x_proj**2 + y_proj**2)
+    )
+
+    def approx_sq(n):
+        n = int(abs(n))
+        if n == 0:
+            return n
+        f = int(np.floor(np.log2(n)))
+        return (int(n) << f) + (n << 1)
+
+    def approx_l2(x, y):
+        return max(x, y) + 1/2*min(x, y)
+
+    norms_approx.append(
+        #np.sqrt(approx_sq(x_proj) + approx_sq(y_proj))
+        approx_l2(x_proj, y_proj)
+    )
+
 
 
 for step in range(n_steps):
@@ -52,8 +75,10 @@ for step in range(n_steps):
     plot(X_cur, Y_cur, Z_cur)
 
 
-
-
+f, axs = plt.subplots(nrows=3)
+axs[0].plot(norms)
+axs[1].plot(norms_approx)
+axs[2].plot(abs(np.array(norms_approx) - np.array(norms)))
 
 
 x_p, y_p = zip(*points_2d)
