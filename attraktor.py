@@ -20,6 +20,7 @@ points = []
 points_2d = []
 norms = []
 norms_approx = []
+norm_scale = 32
 
 def plot(x, y, z):
     global points, points_2d
@@ -42,7 +43,7 @@ def plot(x, y, z):
     y_proj = int(u * 25) >> 6
 
     norms.append(
-        np.sqrt(x_proj**2 + y_proj**2)
+        np.sqrt(x_proj**2 + y_proj**2) / norm_scale
     )
 
     def approx_sq(n):
@@ -57,7 +58,7 @@ def plot(x, y, z):
 
     norms_approx.append(
         #np.sqrt(approx_sq(x_proj) + approx_sq(y_proj))
-        approx_l2(x_proj, y_proj)
+        approx_l2(x_proj, y_proj) / norm_scale
     )
 
 
