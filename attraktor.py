@@ -21,6 +21,7 @@ points_2d = []
 norms = []
 norms_approx = []
 norm_scale = 32
+grads = []
 
 def plot(x, y, z):
     global points, points_2d
@@ -43,7 +44,9 @@ def plot(x, y, z):
     y_proj = int(u * 25) >> 6
 
     norms.append(
-        np.sqrt(x_proj**2 + y_proj**2) / norm_scale
+        #np.sqrt(x_proj**2 + y_proj**2) / norm_scale
+        #np.sqrt(grads[-1][0]**2 + grads[-1][1]**2),
+        np.sqrt(grads[-1][0]**2 + (grads[-1][1] + 2*grads[-1][2])**2),
     )
 
     def approx_sq(n):
@@ -58,7 +61,12 @@ def plot(x, y, z):
 
     norms_approx.append(
         #np.sqrt(approx_sq(x_proj) + approx_sq(y_proj))
-        approx_l2(x_proj, y_proj) / norm_scale
+        #approx_l2(x_proj, y_proj) / norm_scale
+        #approx_l2(grads[-1][0], grads[-1][1])
+        approx_l2(
+            abs(grads[-1][0]) // 4,
+            abs(grads[-1][1] + 2*grads[-1][2]) // 4,
+        )
     )
 
 
@@ -73,17 +81,20 @@ for step in range(n_steps):
     Z_new = X_cur * Y_cur - c * Z_cur
     Z_cur += Z_new * dt
 
+    grads.append((int(X_new/8), int(Y_new/8), int(Z_new/8)))
+
     plot(X_cur, Y_cur, Z_cur)
 
 
-f, axs = plt.subplots(nrows=3)
+f, axs = plt.subplots(nrows=4)
 axs[0].plot(norms)
 axs[1].plot(norms_approx)
 axs[2].plot(abs(np.array(norms_approx) - np.array(norms)))
 
+print(np.array(grads).max(axis=0))
 
 x_p, y_p = zip(*points_2d)
-plt.plot(x_p, y_p)
+axs[3].plot(x_p, y_p)
 plt.show()
 
 
