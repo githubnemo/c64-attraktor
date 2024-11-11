@@ -756,6 +756,11 @@ play_duration_voice2
 play_duration_voice3
     !byte $01
 
+
+off_duration
+    !byte $00
+
+
 ; zero page variables for pointers to sounds
 !addr voice1_ptr = $30
 !addr voice2_ptr = $32
@@ -833,9 +838,8 @@ init_sid
     rts
 }
 
-
-!zone play_sounds {
-play_sounds
+!macro m_key_is_pressed .addr_no {
+    ; fall through if yes, jump to .addr_no if not
     lda #$ff
     sta $DC02
     lda #$00
@@ -846,23 +850,60 @@ play_sounds
 
     lda $DC01
     and #0b00010000
-    bne .no_key
+    bne .addr_no         ; quick hack to only play sound on 'M' key hold
+}
 
 
-
-    dec play_duration_voice1
-    beq .advance_loop_voice1
-    .return_advance_loop_voice1
-
-    ; stop playing stuff once duration of voice1 is 0 after fill
+!zone play_sounds {
+play_sounds
     lda play_duration_voice1
-    beq .restart ; returns
+    clc
+    cmp #2
+    bcs .play_sound         ; if play duration is >1 play that sound
 
+    lda off_duration
+    bne .off
+
+    +m_key_is_pressed .no_key
+
+    ; init playing of sound
+    ;lda #$0a
+    clc
+    lda INT_M
+    lsr
+    lsr
+    lsr
+    adc #1
+    sta play_duration_voice1
+    sta off_duration
     jsr .play_sound_voice1
+
+    .play_sound
+    dec play_duration_voice1
+
+    .return_advance_loop_voice1
+    rts
+
+
+.off
+    lda #00
+    sta CONTROL_VOICE1
+    dec off_duration
 .no_key
     rts
 
 .play_sound_voice1
+    lda #$84
+    sta SUSTAIN_REL_VOICE1
+    lda #$0a
+    sta FREQ_HI_VOICE1
+    lda #$11
+    sta CONTROL_VOICE1
+    lda #0
+    sta ATTACK_DUR_VOICE1
+    rts
+
+.play_sound_voice1_looped ; commented out
     ldy sound_idx
 
     lda (sound_ptr), y
@@ -884,6 +925,7 @@ play_sounds
     iny
     lda (voice1_ptr), y
     sta play_duration_voice1
+    sta off_duration
 
     inc voice1_ptr
     inc voice1_ptr
@@ -1027,6 +1069,19 @@ novibrato
 ;
 voice1
 voice1loop
+    !word basedrum
+    !byte $0c
+    !word hihat
+    !byte $06
+    !word hihat
+    !byte $06
+    !word snare
+    !byte $0c
+    !word hihat
+    !byte $06
+    !word hihat
+    !byte $06
+
     !word basedrum
     !byte $0c
     !word hihat
