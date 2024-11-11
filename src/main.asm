@@ -135,6 +135,9 @@ clearscr_loop
 !addr INT_X = $C600
 !addr INT_Y = $C602
 !addr INT_M = $C604
+!addr INT_X_DT = $C606
+!addr INT_Y_DT = $C608
+!addr INT_Z_DT = $C60A
 
 !addr SCREEN_ADDR = $C630
 
@@ -331,6 +334,16 @@ jsr MOVMF
     sta $61
 }
 
+!macro save_int_gradient_to .target {
+    ; save int(grad/8) to .target
+    jsr MOVFA
+    clc
+    lda $61
+    sbc #3
+    sta $61
+    +fac1_to_int16 .target
+    jsr MOVEF
+}
 
 ; testing operation order of FSUB
 ;
@@ -383,6 +396,7 @@ xyz_step
     lda#< FP_A
     ldy#> FP_A
     jsr FMULT
+    +save_int_gradient_to INT_X_DT
     ; 3. FAC1 * dt
     +multiply_dt_to_fac1
     ; 4. FAC1 + X_cur
@@ -432,6 +446,7 @@ xyz_step
     jsr MOVFA                ; ARG = FAC1
     +float_to_fac1 FP_YCUR
     jsr FSUBT
+    +save_int_gradient_to INT_Y_DT
     ; FAC1 * dt
     +multiply_dt_to_fac1
     ; FAC1 + Y_cur
@@ -456,6 +471,7 @@ xyz_step
     jsr MOVFA
     +float_to_fac1 FP_TEMP
     jsr FSUBT
+    +save_int_gradient_to INT_Z_DT
     ; 4. FAC1 * dt
     +multiply_dt_to_fac1
     ; 5. FAC1 + Z_cur
@@ -498,53 +514,52 @@ xyz_step
     sbc INT_Y
     sta INT_Y
 
-    ; compute l2 norm to get length of X/Y gradient.
-    ; * we scale the gradient by a factor to get well-behaved values;
-    ;   this means that X and Y will be 8 bit values
+    ; compute l2 norm L2(int(dx), int(dy)+2int(dz)) to get the current
+    ; curve's magnitude. note that we only scale dz by 2 as simulations
+    ; deemed this sufficient and safes us some computation.
+    ;
     ; * we use an L2 approximation (max(x,y) + 1/2*min(x,y)) to avoid
     ;   sqrt and squaring :)
-    lda INT_X
-    sta INT_M
-    lda INT_X+1
-    sta INT_M+1
-    +rshift_16bit INT_M+1, INT_M
-    lsr INT_M
-    lsr INT_M
-    lsr INT_M
-    lsr INT_M
+    ; * we scale both dx and dy+2dz by 1/4 to get a good value range
+    ;   for our purporses (math. correctness to hell)
+    ;
+    ;
+    lda INT_Y_DT
+    clc
+    adc INT_Z_DT
+    adc INT_Z_DT
+    sta INT_M     ; INT_M = A = dy + 2dz
+    cmp INT_X_DT
 
-    lda INT_Y
-    sta $FB
-    lsr $FB
-    lsr $FB
-    lsr $FB
-    lsr $FB
-    lsr $FB
-
-    lda INT_M
-    cmp $FB
     bcs .x_is_max_y_is_min
     jmp .y_is_max_x_is_min
 
 .x_is_max_y_is_min
-    ; INT_M = (x/scale) (= max(x/scale,y/scale))
-    lda $FB
+    lda INT_M
+    lsr           ;
+    lsr           ; scale dy+2dz value by 4 (we do x/4 later)
+    lsr           ; scale INT_M by 2 since it contains the minimum
+    sta INT_M
+    lda INT_X_DT
+    lsr
     lsr
     clc
-    adc INT_M
+    adc INT_M     ; INT_M = dx/4 (max) + ((dy + 2dz)/4)/2
     sta INT_M
     jmp .l2_ready
 
 .y_is_max_x_is_min
-    ; INT_M = (x/scale) (= min(x/scale,y/scale))
-    lsr INT_M
+    lda INT_M
+    lsr
+    lsr           ; INT_M = (dy+2dz)/4 (max)
+    sta INT_M
+    lda INT_X_DT
+    lsr
+    lsr           ; scale dx by 4
+    lsr           ; scale dx by 2 because its the minimum
     clc
-    lda $FB
     adc INT_M
     sta INT_M
-    lda #0
-    adc INT_M+1
-    sta INT_M+1
 
 .l2_ready
     rts
