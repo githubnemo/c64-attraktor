@@ -760,6 +760,8 @@ play_duration_voice3
 off_duration
     !byte $00
 
+vibrato_state
+    !byte $00
 
 ; zero page variables for pointers to sounds
 !addr voice1_ptr = $30
@@ -856,7 +858,7 @@ play_sounds
     ; check if M key is pressed
     lda $DC01
     and #0b00010000
-    bne .addr_no_m         
+    bne .addr_no_m
 
     ; M key handler
     ; init playing of sound
@@ -884,11 +886,15 @@ play_sounds
     sta play_duration_voice2
     jsr .play_sound_voice2
 
+    rts
 .off
     lda #00
     sta CONTROL_VOICE1
     dec off_duration
+    rts
 .no_key
+    lda #00
+    sta CONTROL_VOICE2
     rts
 
 .play_sound_voice1
