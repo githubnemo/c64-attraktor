@@ -838,20 +838,6 @@ init_sid
     rts
 }
 
-!macro m_key_is_pressed .addr_no {
-    ; fall through if yes, jump to .addr_no if not
-    lda #$ff
-    sta $DC02
-    lda #$00
-    sta $DC03
-
-    lda #0b11101111
-    sta $DC00
-
-    lda $DC01
-    and #0b00010000
-    bne .addr_no         ; quick hack to only play sound on 'M' key hold
-}
 
 
 !zone play_sounds {
@@ -864,10 +850,16 @@ play_sounds
     lda off_duration
     bne .off
 
-    +m_key_is_pressed .no_key
+    lda #0b11101111
+    sta $DC00
 
+    ; check if M key is pressed
+    lda $DC01
+    and #0b00010000
+    bne .addr_no_m         
+
+    ; M key handler
     ; init playing of sound
-    ;lda #$0a
     clc
     lda INT_M
     lsr
@@ -878,12 +870,19 @@ play_sounds
     sta off_duration
     jsr .play_sound_voice1
 
-    .play_sound
+.play_sound
     dec play_duration_voice1
 
-    .return_advance_loop_voice1
-    rts
+.addr_no_m
+    ; check if N key is pressed
+    lda $DC01
+    and #0b10000000
+    bne .no_key
 
+    ; N key handler
+    lda #1
+    sta play_duration_voice2
+    jsr .play_sound_voice2
 
 .off
     lda #00
@@ -903,63 +902,20 @@ play_sounds
     sta ATTACK_DUR_VOICE1
     rts
 
-.play_sound_voice1_looped ; commented out
-    ldy sound_idx
-
-    lda (sound_ptr), y
-    sta FREQ_HI_VOICE1
-    iny
-    lda (sound_ptr), y
-    sta CONTROL_VOICE1
-    iny
-    sty sound_idx
-    rts
-
-.advance_loop_voice1
-    ldy #0
-    lda (voice1_ptr), y
-    sta sound_ptr, y
-    iny
-    lda (voice1_ptr), y
-    sta sound_ptr, y
-    iny
-    lda (voice1_ptr), y
-    sta play_duration_voice1
-    sta off_duration
-
-    inc voice1_ptr
-    inc voice1_ptr
-    inc voice1_ptr ; move pointer to next entry in loop list
-
-    ; read first byte as sustain/release value
-    ldy #0
-    lda (sound_ptr), y
-    sta SUSTAIN_REL_VOICE1
-    sty ATTACK_DUR_VOICE1
-    iny
-    sty CONTROL_VOICE1
-    sty sound_idx
-    jmp .return_advance_loop_voice1
-
-
-.restart:
-    ldx #$02
-.restart_loop:
-    lda #$01
-    sta play_durations,x
-
-    lda voiceinit,x
-    sta voice1_ptr,x
-    lda voiceinit+3,x
-    sta voice1_ptr+3,x
-
-    dex
-    bpl .restart_loop
-    lda #$08
-    sta CONTROL_VOICE1
+.play_sound_voice2
+    lda #$84
+    sta SUSTAIN_REL_VOICE2
+    clc
+    lda #$20
+    adc INT_M
+    sta FREQ_HI_VOICE2
+    lda #$11
     sta CONTROL_VOICE2
-    sta CONTROL_VOICE3  ; set all voices to 'test'?
+    lda #0
+    sta ATTACK_DUR_VOICE2
+
     rts
+
 }
 
 
