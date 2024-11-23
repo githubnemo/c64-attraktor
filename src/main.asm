@@ -909,11 +909,23 @@ play_sounds
     rts
 
 .play_sound_voice2
+!set freq = $10
     lda #$84
     sta SUSTAIN_REL_VOICE2
     clc
-    lda #$20
+    lda vibrato_state
+    beq .sub
+    lda #0
+    sta vibrato_state
+    lda #freq
     adc INT_M
+    jmp .freq_modified
+.sub
+    lda #freq
+    sbc INT_M
+    lda #1
+    sta vibrato_state
+.freq_modified
     sta FREQ_HI_VOICE2
     lda #$11
     sta CONTROL_VOICE2
