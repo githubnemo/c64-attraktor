@@ -841,6 +841,25 @@ init_sid
 }
 
 
+;
+;    		CIA 1 Port B ($DC01) 	Joy 2
+;   		PB7 	PB6 	PB5 	PB4 	PB3 	PB2 	PB1 	PB0
+;   CIA1
+;
+;   Port A
+;   ($DC00)
+;   PA7 	STOP 	Q 	C= 	SPACE 	2 	CTRL 	<- 	1
+;   PA6 	/ 	^ 	= 	RSHIFT 	HOME 	    ; 	* 	£
+;   PA5 	, 	@ 	: 	. 	- 	L 	P 	    +
+;   PA4 	N 	O 	K 	M 	0 	J 	I 	    9 	Fire
+;   PA3 	V 	U 	H 	B 	8 	G 	Y 	    7 	Right
+;   PA2 	X 	T 	F 	C 	6 	D 	R 	    5 	Left
+;   PA1 	LSHIFT 	E 	S 	Z 	4 	A 	    W 	3 	Down
+;   PA0 	CRSRDN 	F5 	F3 	F1 	F7 	CRSRRT 	RETURN 	DELETE 	Up
+;   Joy 1 					Fire 	Right 	Left 	Down 	Up
+;
+;   https://www.c64-wiki.com/wiki/Keyboard
+
 
 !zone play_sounds {
 play_sounds
