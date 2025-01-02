@@ -861,8 +861,51 @@ init_sid
 ;   https://www.c64-wiki.com/wiki/Keyboard
 
 
+; sub-routine to clear the screen and reset the state of the drawing
+!zone reset_screen {
+reset_screen
+
+    +set_int_param FP_XCUR, 2
+    +set_int_param FP_YCUR, 1
+    +set_int_param FP_ZCUR, 1
+
+    ldx#32
+    ldy#$00
+
+    lda#$00
+    sta$fb
+    lda#$20
+    sta$fc
+
+    lda#0
+
+    .clearscr_loop
+    sta($fb),y
+    dey
+    bne .clearscr_loop
+    inc$fc
+    ldy#$00
+    dex
+    bne .clearscr_loop
+
+}
+
+
 !zone play_sounds {
 play_sounds
+
+    ; we hijack this interrupt for checking if the user pressed R
+    ; to reset the program. lazyness :)
+    lda #0b11111011
+    sta $DC00
+
+    lda $DC01
+    and #0b00000010
+    bne .r_not_pressed
+
+    jsr reset_screen
+
+.r_not_pressed
     lda play_duration_voice1
     clc
     cmp #2
