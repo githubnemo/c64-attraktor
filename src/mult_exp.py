@@ -5,7 +5,7 @@
 # Mantissa: (m4 >= 128 ? -1 : +1) * ((m4 | 0x80) >> 8 + m3 >> 16 + m2 >> 24 + m1 >> 32)
 # as a C-language like expression, with "x >> y" as "float multiply x by 2↑(-y)" (right-bit-shift operation)
 
-import decimal
+import struct
 
 
 def cbm_float_to_python_float(hex_bytes):
@@ -46,7 +46,6 @@ def _ieee_float_32(sign, exponent, mantissa):
 
 
 def python_float_to_cbm_float(f):
-    import struct
     f32 = struct.unpack('!I', struct.pack('!f', f))[0]
     sign = (f32 & 0x80000000) >> 31
     exponent = (f32 & 0x7f800000) >> 23
@@ -74,7 +73,7 @@ def python_float_to_cbm_float(f):
         sign << 31 |
         mantissa_bytes[0] << 24 |
         mantissa_bytes[1] << 16 |
-        mantissa_bytes[2] << 0
+        mantissa_bytes[2] << 8
     )
 
     #print(bin(mantissa_cbm))
@@ -100,22 +99,171 @@ assert z == 1.0, z
 z = cbm_float_to_python_float([0x81, 0x80, 0x00, 0x00, 0x00])
 assert z == -1.0, z
 
-cbm_hex = [0x98, 0x35, 0x44, 0x7a, 0x00]
+z = cbm_float_to_python_float([0x98, 0x35, 0x44, 0x7a, 0x00])
+assert z == 11879546.0, z
 
+
+def approx_mult_naive_py(f1, f2):
+    int_cast = lambda x: struct.unpack('!I', struct.pack('!f', x))[0]
+    i1 = int_cast(f1)
+    i2 = int_cast(f2)
+    bias = 0x3f76d000
+    mult = i1 + i2 - bias
+    return struct.unpack('!f', struct.pack('!I', mult))[0]
+
+
+def approx_mult_py(f1, f2):  # handles underflow
+    int_cast = lambda x: struct.unpack('!I', struct.pack('!f', x))[0]
+    i1 = int_cast(f1)
+    i2 = int_cast(f2)
+
+    # exponent bias: 0b01111110 (=126)
+    # mantissa bias: 0b11101101101000000000000
+    bias = 0x3f76d000
+
+    mult = (i1 & 0x7fffffff) + (i2 & 0x7fffffff)
+    if mult <= bias:
+        mult = 0
+    else:
+        mult -= bias
+
+    mult |= (i1 ^ i2) & 0x80000000
+    return struct.unpack('!f', struct.pack('!I', mult))[0]
+
+
+def approx_mult_cbm(h1, h2):
+    from numpy import uint8, uint16
+
+    bias = 0x3f76d00000
+    bias = 0x8176d00000
+    bias_bytes = uint8([
+        (bias >> 32) & 0xff,
+        (bias >> 24) & 0xff,
+        (bias >> 16) & 0xff,
+        (bias >>  8) & 0xff,
+        (bias >>  0) & 0xff,
+    ])
+    cbm_bytes = uint8([0, 0, 0 ,0, 0])
+
+    h1 = uint8(h1)
+    h2 = uint8(h2)
+
+    print(' h1:',[f'{n:08b}' for n in h1])
+    print(' h2:',[f'{n:08b}' for n in h2])
+    print('bia:', [f'{n:08b}' for n in bias_bytes])
+
+    # mantissa
+    i = 4
+    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i]
+    overflow = (cbm_bytes[i] >> 8) & 1
+    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    i = 3
+    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    overflow = (cbm_bytes[i] >> 8) & 1
+    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    i = 2
+    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    overflow = (cbm_bytes[i] >> 8) & 1
+    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    i = 1
+    # this byte includes the sign bit and needs special treatment
+    cbm_bytes[i] = (h1[i] & 0x7f).astype(uint16) + (h2[i] & 0x7f) - bias_bytes[i] + overflow
+    overflow = (cbm_bytes[i] >> 8) & 1
+    cbm_bytes[i] = (cbm_bytes[i] & 0x7f) | ((h1[i] ^ h2[i]) & 0x80)
+    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    # exponent
+    i = 0
+    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    overflow = (cbm_bytes[i] >> 8) & 1  # TODO use?
+    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+
+    print('cbm:',[f'{n:08b}' for n in cbm_bytes])
+
+    return [int(n) for n in cbm_bytes]
+
+def test_conversion():
+    convert = cbm_float_to_python_float
+    is_close = lambda x, y, tol=1e-4: abs(x-y) < tol
+
+    assert is_close(convert(python_float_to_cbm_float(0.5)), 0.5)
+    assert is_close(convert(python_float_to_cbm_float(1.0)), 1.0)
+    assert is_close(convert(python_float_to_cbm_float(2.0)), 2.0)
+    assert is_close(convert(python_float_to_cbm_float(0.25)), 0.25)
+    assert is_close(convert(python_float_to_cbm_float(0.33)), 0.33)
+    assert is_close(convert(python_float_to_cbm_float(0.1234)), 0.1234)
+    assert is_close(convert(python_float_to_cbm_float(0.12345678)), 0.1234578)
+    assert is_close(convert(python_float_to_cbm_float(-0.12345678)), -0.12345678)
+    assert is_close(convert(python_float_to_cbm_float(11879546.0)), 11879546.0)
 
 if __name__ == "__main__":
-    def convert(cbm_hex):
-        result = cbm_float_to_python_float(cbm_hex)
-        print("Converted CBM float to Python float:", result)
+    test_conversion()
 
-    import sys
-    convert(([int(n, 16) for n in sys.argv[1:]] + [0x00] * 5)[:5])
+    def print_error(f1, f2, threshold=0.1):
+        error = abs(f1-f2)/(f2+1e-4)
+        end = "OK" if abs(error) < threshold else "\033[1m\033[31mFAILED\033[0m"
+        end += "\n"
+        print(f"result: {f1}, error: {abs(f1-f2)/(f2+1e-4):.3f}: ", end=end)
 
-    convert(python_float_to_cbm_float(0.5))
-    convert(python_float_to_cbm_float(1.0))
-    convert(python_float_to_cbm_float(2.0))
-    convert(python_float_to_cbm_float(0.25))
-    convert(python_float_to_cbm_float(0.33))
-    convert(python_float_to_cbm_float(0.1234))
-    convert(python_float_to_cbm_float(0.12345678))
-    convert(python_float_to_cbm_float(-0.12345678))
+
+    print_error(approx_mult_py(1, 2), 2)
+    print_error(approx_mult_py(1.5, 2), 3)
+    print_error(approx_mult_py(1.2345, 2), 2.469)
+    print_error(approx_mult_py(1.2345, 1.2345), 1.5239)
+    print_error(approx_mult_py(0.5, 0), 0)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(1),
+            python_float_to_cbm_float(2),
+        )
+    ), 2)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(1.5),
+            python_float_to_cbm_float(2),
+        )
+    ), 3)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(1.2345),
+            python_float_to_cbm_float(2),
+        )
+    ), 2.469)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(-1.2345),
+            python_float_to_cbm_float(2),
+        )
+    ), -2.469)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(1.2345),
+            python_float_to_cbm_float(1.2345),
+        )
+    ), 1.5239)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(1.2345),
+            python_float_to_cbm_float(0),
+        )
+    ), 0)
+
+    # FIXME this overflows
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(0),
+            python_float_to_cbm_float(0),
+        )
+    ), 0)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(0.5),
+            python_float_to_cbm_float(0),
+        )
+    ), 0)
