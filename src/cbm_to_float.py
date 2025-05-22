@@ -31,6 +31,9 @@ def cbm_float_to_python_float(hex_bytes):
     return float_value
 
 
+def cbm_mult(hex1, hex2):
+    pass
+
 
 z = cbm_float_to_python_float([0x80, 0x00, 0x00, 0x00, 0x00])
 assert z == 0.5, z

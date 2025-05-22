@@ -6,7 +6,7 @@
 # as a C-language like expression, with "x >> y" as "float multiply x by 2↑(-y)" (right-bit-shift operation)
 
 import struct
-
+import numpy as np
 
 def cbm_float_to_python_float(hex_bytes):
     # Ensure we have exactly 5 bytes
@@ -148,34 +148,46 @@ def approx_mult_cbm(h1, h2):
     h1 = uint8(h1)
     h2 = uint8(h2)
 
-    print(' h1:',[f'{n:08b}' for n in h1])
-    print(' h2:',[f'{n:08b}' for n in h2])
+    print(' h1:', [f'{n:08b}' for n in h1])
+    print(' h2:', [f'{n:08b}' for n in h2])
+    print('1+2:', [f'{(n+m):08b}' for n, m in zip(h1, h2)])
     print('bia:', [f'{n:08b}' for n in bias_bytes])
 
     # mantissa
     i = 4
-    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i]
-    overflow = (cbm_bytes[i] >> 8) & 1
-    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    tmp = h1[i].astype(uint16) + h2[i] - bias_bytes[i]
+    overflow = (tmp >> 8) & 1
+    cbm_bytes[i] = tmp.astype(uint8)
     i = 3
-    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
-    overflow = (cbm_bytes[i] >> 8) & 1
-    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    tmp = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    overflow = (tmp >> 8) & 1
+    cbm_bytes[i] = tmp.astype(uint8)
     i = 2
-    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
-    overflow = (cbm_bytes[i] >> 8) & 1
-    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    tmp = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    overflow = (tmp >> 8) & 1
+    cbm_bytes[i] = tmp.astype(uint8)
     i = 1
     # this byte includes the sign bit and needs special treatment
+    # FIXME overflow is not correctly handled here IMO
     cbm_bytes[i] = (h1[i] & 0x7f).astype(uint16) + (h2[i] & 0x7f) - bias_bytes[i] + overflow
     overflow = (cbm_bytes[i] >> 8) & 1
     cbm_bytes[i] = (cbm_bytes[i] & 0x7f) | ((h1[i] ^ h2[i]) & 0x80)
     cbm_bytes[i] = cbm_bytes[i].astype(uint8)
     # exponent
     i = 0
-    cbm_bytes[i] = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    tmp = h1[i].astype(uint16) + h2[i] + overflow
+    overflow = (tmp >> 8) & 1  # TODO use?
+    cbm_bytes[i] = tmp.astype(uint8)
+
+    # if we see a overflow bit we know that the byte can be subtracted
+    # with the bias
+    if overflow:
+        cbm_bytes[i] -= bias_bytes[i]
+    else:
+        cbm_bytes[i] = 0
+
     overflow = (cbm_bytes[i] >> 8) & 1  # TODO use?
-    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+
 
     print('cbm:',[f'{n:08b}' for n in cbm_bytes])
 
@@ -210,6 +222,12 @@ if __name__ == "__main__":
     print_error(approx_mult_py(1.2345, 2), 2.469)
     print_error(approx_mult_py(1.2345, 1.2345), 1.5239)
     print_error(approx_mult_py(0.5, 0), 0)
+
+    print('wide range test')
+    for x in np.linspace(-30, 30, 20):
+        print(f'{x} * {x} ?= {x*x}')
+        print_error(approx_mult_py(x, x), x * x)
+
 
     print_error(cbm_float_to_python_float(
         approx_mult_cbm(
@@ -253,7 +271,6 @@ if __name__ == "__main__":
         )
     ), 0)
 
-    # FIXME this overflows
     print_error(cbm_float_to_python_float(
         approx_mult_cbm(
             python_float_to_cbm_float(0),
@@ -267,3 +284,13 @@ if __name__ == "__main__":
             python_float_to_cbm_float(0),
         )
     ), 0)
+
+    print('wide range test')
+    for x in np.linspace(-30, 30, 20):
+        print(f'{x} * {x} ?= {x*x}')
+        print_error(cbm_float_to_python_float(
+            approx_mult_cbm(
+                python_float_to_cbm_float(x),
+                python_float_to_cbm_float(x),
+            )
+        ), x*x)
