@@ -134,7 +134,49 @@ def approx_mult_py(f1, f2):  # handles underflow
 def approx_mult_cbm(h1, h2):
     from numpy import uint8, uint16
 
+    cbm_bytes = uint8([0, 0, 0, 0, 0])
+    h1 = uint8(h1)
+    h2 = uint8(h2)
+    overflow = 0
+
+    for i in [4, 3, 2]:
+        tmp = h1[i].astype(uint16) + h2[i] + overflow
+        overflow = tmp >> 8
+        cbm_bytes[i] = tmp
+
+    # this byte has the sign bit
+    i = 1
+    tmp = (h1[i] & 0x7f) + (h2[i] & 0x7f) + overflow
+    overflow = tmp >> 7
+    cbm_bytes[i] = (tmp & 0x7f) | ((h1[i] ^ h2[i]) & 0x80)
+
+    # this byte has the exponent
+    i = 0
+    tmp = h1[i].astype(uint16) + h2[i] + overflow
+
+    # handle underflow when both exponents are 0
+    if tmp < 128:
+        tmp = 0
+    else:
+        tmp = tmp.astype(uint8) - 129
+
+    cbm_bytes[i] = tmp
+
+    return [int(n) for n in cbm_bytes]
+
+
+def approx_mult_cbm_v1(h1, h2):
+    from numpy import uint8, uint16
+
     bias = 0x3f76d00000
+
+    # CBM uses -128 exponent offset instead of -127.
+    # in the original we have
+    #   exponent = x - 0x3f - 127
+    #            = x - 126 - 127
+    #            = x -
+    #
+    # TODO maybe 0x7d is better instead of 0x81?
     bias = 0x8176d00000
     bias_bytes = uint8([
         (bias >> 32) & 0xff,
@@ -163,16 +205,28 @@ def approx_mult_cbm(h1, h2):
     overflow = (tmp >> 8) & 1
     cbm_bytes[i] = tmp.astype(uint8)
     i = 2
-    tmp = h1[i].astype(uint16) + h2[i] - bias_bytes[i] + overflow
+    tmp = h1[i].astype(uint16) + h2[i] + overflow
     overflow = (tmp >> 8) & 1
+
+    if overflow:
+        tmp -= bias_bytes[i]
+    else:
+        tmp = np.uint8(0)
+
     cbm_bytes[i] = tmp.astype(uint8)
     i = 1
     # this byte includes the sign bit and needs special treatment
-    # FIXME overflow is not correctly handled here IMO
-    cbm_bytes[i] = (h1[i] & 0x7f).astype(uint16) + (h2[i] & 0x7f) - bias_bytes[i] + overflow
-    overflow = (cbm_bytes[i] >> 8) & 1
-    cbm_bytes[i] = (cbm_bytes[i] & 0x7f) | ((h1[i] ^ h2[i]) & 0x80)
-    cbm_bytes[i] = cbm_bytes[i].astype(uint8)
+    # FIXME underflow is not correctly handled here IMO
+    tmp = (h1[i] & 0x7f).astype(uint16) + (h2[i] & 0x7f) + overflow
+    overflow = int((tmp & 0x80) > 0)
+
+    if overflow:
+        tmp -= bias_bytes[i]
+    else:
+        tmp = np.uint8(0)
+
+    cbm_bytes[i] = (tmp & 0x7f) | ((h1[i] ^ h2[i]) & 0x80)
+    cbm_bytes[i] = tmp.astype(uint8)
     # exponent
     i = 0
     tmp = h1[i].astype(uint16) + h2[i] + overflow
@@ -193,6 +247,14 @@ def approx_mult_cbm(h1, h2):
 
     return [int(n) for n in cbm_bytes]
 
+
+def print_error(f1, f2, threshold=0.1):
+    error = abs(f1-f2)/(f2+1e-4)
+    end = "OK" if abs(error) < threshold else "\033[1m\033[31mFAILED\033[0m"
+    end += "\n"
+    print(f"result: {f1:.5f}, ref: {f2:.5f} error: {abs(f1-f2)/(f2+1e-4):.3f}: ", end=end)
+
+
 def test_conversion():
     convert = cbm_float_to_python_float
     is_close = lambda x, y, tol=1e-4: abs(x-y) < tol
@@ -207,16 +269,8 @@ def test_conversion():
     assert is_close(convert(python_float_to_cbm_float(-0.12345678)), -0.12345678)
     assert is_close(convert(python_float_to_cbm_float(11879546.0)), 11879546.0)
 
-if __name__ == "__main__":
-    test_conversion()
 
-    def print_error(f1, f2, threshold=0.1):
-        error = abs(f1-f2)/(f2+1e-4)
-        end = "OK" if abs(error) < threshold else "\033[1m\033[31mFAILED\033[0m"
-        end += "\n"
-        print(f"result: {f1}, error: {abs(f1-f2)/(f2+1e-4):.3f}: ", end=end)
-
-
+def test_mult_python():
     print_error(approx_mult_py(1, 2), 2)
     print_error(approx_mult_py(1.5, 2), 3)
     print_error(approx_mult_py(1.2345, 2), 2.469)
@@ -229,6 +283,12 @@ if __name__ == "__main__":
         print_error(approx_mult_py(x, x), x * x)
 
 
+
+if __name__ == "__main__":
+    #test_conversion()
+    #test_mult_python()
+
+    """
     print_error(cbm_float_to_python_float(
         approx_mult_cbm(
             python_float_to_cbm_float(1),
@@ -264,6 +324,8 @@ if __name__ == "__main__":
         )
     ), 1.5239)
 
+    """
+
     print_error(cbm_float_to_python_float(
         approx_mult_cbm(
             python_float_to_cbm_float(1.2345),
@@ -287,6 +349,7 @@ if __name__ == "__main__":
 
     print('wide range test')
     for x in np.linspace(-30, 30, 20):
+        """
         print(f'{x} * {x} ?= {x*x}')
         print_error(cbm_float_to_python_float(
             approx_mult_cbm(
@@ -294,3 +357,10 @@ if __name__ == "__main__":
                 python_float_to_cbm_float(x),
             )
         ), x*x)
+        """
+        print_error(cbm_float_to_python_float(
+            approx_mult_cbm(
+                python_float_to_cbm_float(3.14159),
+                python_float_to_cbm_float(x),
+            )
+        ), 3.14159*x)
