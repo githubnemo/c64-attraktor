@@ -131,7 +131,7 @@ def approx_mult_py(f1, f2):  # handles underflow
     return struct.unpack('!f', struct.pack('!I', mult))[0]
 
 
-def approx_mult_cbm(h1, h2):
+def approx_mult_cbm_v2(h1, h2):
     from numpy import uint8, uint16
 
     cbm_bytes = uint8([0, 0, 0, 0, 0])
@@ -153,12 +153,10 @@ def approx_mult_cbm(h1, h2):
     # this byte has the exponent
     i = 0
     tmp = h1[i].astype(uint16) + h2[i] + overflow
-
-    # handle underflow when both exponents are 0
     if tmp < 128:
         tmp = 0
     else:
-        tmp = tmp.astype(uint8) - 129
+        tmp = tmp - 129
 
     cbm_bytes[i] = tmp
 
@@ -246,6 +244,9 @@ def approx_mult_cbm_v1(h1, h2):
     print('cbm:',[f'{n:08b}' for n in cbm_bytes])
 
     return [int(n) for n in cbm_bytes]
+
+
+approx_mult_cbm = approx_mult_cbm_v2
 
 
 def print_error(f1, f2, threshold=0.1):
@@ -348,7 +349,7 @@ if __name__ == "__main__":
     ), 0)
 
     print('wide range test')
-    for x in np.linspace(-30, 30, 20):
+    for x in np.linspace(-30, 30, 100):
         """
         print(f'{x} * {x} ?= {x*x}')
         print_error(cbm_float_to_python_float(
