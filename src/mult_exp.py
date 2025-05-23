@@ -365,3 +365,13 @@ if __name__ == "__main__":
                 python_float_to_cbm_float(x),
             )
         ), 3.14159*x)
+
+    print('rand test')
+    np.random.seed(42)
+    for x in np.random.uniform(size=100):
+        print_error(cbm_float_to_python_float(
+            approx_mult_cbm(
+                python_float_to_cbm_float(3.14159),
+                python_float_to_cbm_float(x),
+            )
+        ), 3.14159*x)
