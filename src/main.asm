@@ -214,8 +214,7 @@ sta SCREEN_MASK_7
 !addr FACINX = $B1AA
 ; Add FAC + number in RAM (A=Addr.LB, Y=Addr.HB)
 !addr FADD = $B867
-; Subtract FAC - number in RAM (A=Addr.LB, Y=Addr.HB)
-; FAC = Mem - FAC
+; Subtract FAC - number in RAM (A=Addr.LB, Y=Addr.HB) FAC = Mem - FAC
 !addr FSUB = $B850
 ; Divide number in RAM by FAC (A=Addr.LB, Y=Addr.HB)
 !addr FDIV = $BB0F
@@ -227,11 +226,17 @@ sta SCREEN_MASK_7
 !addr MOVEF = $BBFC
 ; Copy FAC to ARG
 !addr MOVFA = $BC0F
-; Subtract ARG from FAC1
-; FAC = ARG - FAC
+; Subtract ARG from FAC1 FAC = ARG - FAC
 !addr FSUBT = $B853
 ; Convert FAC1 to 32 bit integer
 !addr QINT = $BC9B
+; Fill ARG with number from memory (A=Adr.LB, Y=Adr.HB). Then, in preparation
+; for subsequent operations, compares the signs of ARG and FAC and writes the
+; result to address $6F ($00: if signs are the same, $80: if signs are
+; different), and loads the exponent from FAC to A (sets zero flag when
+; FAC equals zero). The routines FADDT , FDIVT , FMULTT and FPWRT
+; require this preparation.
+!addr CONUPK = $BA8C
 
 
 !macro set_int_param .name, .value {
@@ -270,7 +275,8 @@ sta SCREEN_MASK_7
 !macro fmult .other {
     lda#< .other
     ldy#> .other
-    jsr FMULT
+;    jsr FMULT
+    jsr fast_mult
 }
 
 !macro movmf .other {
@@ -381,6 +387,81 @@ hang
    jmp hang
 
 
+!zone fast_mult {
+fast_mult
+    ; similar interface to FMULT:
+    ; Multiplies a number from RAM and FAC (clobbers ARG, A=Addr.LB, Y=Addr.HB)
+    ;
+    ; ---
+    ; FAC1
+    ;  exponent is in $61
+    ;  mantissa is in $62 $63 $64 $65
+    ;  sign is in $66
+    ;  possibly clear $70
+    ; ARG
+    ;  exponent is in $69
+    ;  mantissa is in $6A $6B $6C $6D
+    ;  sign is in $6E (0 for positive, $FF (-1) for negative)
+    ;
+    ;
+    ; load the 2nd number to ARG using CONUPK
+    jsr CONUPK
+
+    clc
+    lda $65
+    adc $6D
+    sta $65
+
+    lda $64
+    adc $6C
+    sta $64
+
+    lda $63
+    adc $6B
+    sta $63
+
+    lda $62
+    adc $6A
+    sta $62
+
+    lda $61
+    adc $69
+    sta $61
+    clc
+
+    ; check if $61 < 128, set to 0 else subtract 129
+    ; to handle underflow (i.e. when adding two numbers with exp=0)
+    lda #127
+    cmp $61  ; C = A >= M = 127 >= M
+    bcs .underflow; underflow, exponent is < 128
+    lda $61
+    clc
+    sbc #129
+    sta $61
+    jmp .fi__
+.underflow
+    lda $61
+    clc
+    sbc #128
+    sta $61
+.fi__
+
+    ; make sure that the MSB mantissa bit is always 1 (normalization)
+    lda $62
+    ora #$80
+    sta $62
+
+    ; sign bit handling; XOR sign byte
+    lda $66
+    eor $6e
+    sta $66
+
+    lda #0
+    sta $70
+
+    rts
+}
+
 
 !zone xyz_step {
 xyz_step
@@ -395,7 +476,8 @@ xyz_step
     ; 2. a * FAC1
     lda#< FP_A
     ldy#> FP_A
-    jsr FMULT
+    ;jsr FMULT
+    jsr fast_mult
     +save_int_gradient_to INT_X_DT
     ; 3. FAC1 * dt
     +multiply_dt_to_fac1
