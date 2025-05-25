@@ -303,7 +303,7 @@ sta SCREEN_MASK_7
 +set_int_param FP_B, 28
 +set_int_param FP_C, 8
 
-+set_int_param FP_SCALE_Y, 25
++set_int_param FP_SCALE_Y, 15
 +set_int_param FP_OFFSET_X, 160
 
 ; initialize FP_C = 8/3
@@ -361,6 +361,97 @@ jsr MOVMF
 ;+movmf FP_TEMP ; expect 90 in FP_TEMP
 
 
+jmp main
+
+
+; testing fast float multiplication
+;
+; FP_A = 3.1415
+; ['0x82', '0x49', '0xe', '0x56', '0x0']
+lda #0x82
+sta FP_A+0
+lda #0x49
+sta FP_A+1
+lda #0x0e
+sta FP_A+2
+lda #0x56
+sta FP_A+3
+lda #0x00
+sta FP_A+4
++float_to_fac1 FP_A
+; FP_B = -10
+; ['0x84', '0xa0', '0x0', '0x0', '0x0']
+lda #0x84
+sta FP_B+0
+lda #0xa0
+sta FP_B+1
+lda #0x00
+sta FP_B+2
+lda #0x00
+sta FP_B+3
+lda #0x00
+sta FP_B+4
++fmult FP_B
++movmf FP_C
+
+
+; code for multiplying 3.1415 and 100
+; inspect $c48a for result
+; expected for approx mult: 290.11199951171875
+lda #$82
+sta $c480
+lda #$49
+sta $c481
+lda #$0e
+sta $c482
+lda #$56
+sta $c483
+lda #$00
+sta $c484
++float_to_fac1 $c480
+lda #$87
+sta $c485
+lda #$48
+sta $c486
+lda #$00
+sta $c487
+lda #$00
+sta $c488
+lda #$00
+sta $c489
++fmult $c485
++movmf $c48a
+
+; code for multiplying 3.1415 and 1000
+; inspect $c48a for result
+; expected for approx mult: 3120.89599609375
+lda #$82
+sta $c480
+lda #$49
+sta $c481
+lda #$0e
+sta $c482
+lda #$56
+sta $c483
+lda #$00
+sta $c484
++float_to_fac1 $c480
+lda #$8a
+sta $c485
+lda #$7a
+sta $c486
+lda #$00
+sta $c487
+lda #$00
+sta $c488
+lda #$00
+sta $c489
++fmult $c485
++movmf $c48a
+
+
+
+jmp hang
 
 
 main
@@ -424,25 +515,32 @@ fast_mult
     adc $6A
     sta $62
 
+    ; use a 16 bit addition for the exponent to handle overflows
+    ; properly. there's probably a way to do this in 8 bit as well.
+    ; e16 = (fb, fc)
     lda $61
     adc $69
     sta $61
-    clc
 
-    ; check if $61 < 128, set to 0 else subtract 129
-    ; to handle underflow (i.e. when adding two numbers with exp=0)
-    lda #127
-    cmp $61  ; C = A >= M = 127 >= M
-    bcs .underflow; underflow, exponent is < 128
-    lda $61
-    clc
-    sbc #129
+    ; check if the addition carried over to the high bit. if it did not carry
+    ; over it is an indicator that we might be dealing with a zero
+    ; multiplcation.
+    bcs .no_underflow
+
+    ; to make sure, let's check if the 8 bit portion is also < 128, then
+    ; we're sure there's an underflow.
+    lda #128
+    cmp $61  ; C = A >= M = 128 >= M
+    bcc .no_underflow; no underflow, exponent is >= 129
+.underflow
+    lda #0
     sta $61
     jmp .fi__
-.underflow
+.no_underflow
+    ; subtract 129 from the added exponents
     lda $61
-    clc
-    sbc #128
+    sec ; similar to clc for adc but the other way around
+    sbc #129
     sta $61
 .fi__
 

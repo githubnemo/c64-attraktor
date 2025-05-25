@@ -13,6 +13,9 @@ def cbm_float_to_python_float(hex_bytes):
     if len(hex_bytes) != 5:
         raise ValueError("CBM float requires exactly 5 bytes")
 
+    if hex_bytes[0] == 0:
+        return 0
+
     # Extract the exponent and bias it by subtracting 128
     exponent = hex_bytes[0] - 128
 
@@ -89,6 +92,8 @@ def python_float_to_cbm_float(f):
     return hex_bytes
 
 
+z = cbm_float_to_python_float([0x00, 0x00, 0x00, 0x00, 0x00])
+assert z == 0.0, z
 
 z = cbm_float_to_python_float([0x80, 0x00, 0x00, 0x00, 0x00])
 assert z == 0.5, z
@@ -154,8 +159,10 @@ def approx_mult_cbm_v2(h1, h2):
     i = 0
     tmp = h1[i].astype(uint16) + h2[i] + overflow
     if tmp < 128:
+        print('AWHHHHH, {:016b}'.format(tmp))
         tmp = 0
     else:
+        print('{:016b}'.format(tmp))
         tmp = tmp - 129
 
     cbm_bytes[i] = tmp
@@ -375,3 +382,39 @@ if __name__ == "__main__":
                 python_float_to_cbm_float(x),
             )
         ), 3.14159*x)
+
+    print([hex(n) for n in python_float_to_cbm_float(3.1415)])
+    print([hex(n) for n in python_float_to_cbm_float(-10)])
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(3.1415),
+            python_float_to_cbm_float(-10),
+        )), 3.1415*-10)
+
+
+    def example_numbers_to_asm(f1, f2, addr=0xc480):
+        h1 = python_float_to_cbm_float(f1)
+        h2 = python_float_to_cbm_float(f2)
+
+        expected = cbm_float_to_python_float(
+            approx_mult_cbm(
+                python_float_to_cbm_float(f1),
+                python_float_to_cbm_float(f2),
+            ))
+
+        print(f"; code for multiplying {f1} and {f2}")
+        print(f"; inspect ${addr+5+5:04x} for result")
+        print(f"; expected for approx mult: {expected}")
+        for i, hi in enumerate(h1):
+            print(f"lda #${hi:02x}")
+            print(f"sta ${addr+i:04x}")
+        print(f"+float_to_fac1 ${addr:04x}")
+        for i, hi in enumerate(h2):
+            print(f"lda #${hi:02x}")
+            print(f"sta ${addr+5+i:04x}")
+        print(f"+fmult ${addr+5:04x}")
+        print(f"+movmf ${addr+5+5:04x}")
+
+
+    example_numbers_to_asm(3.1415, 1000, addr=0xc480)
