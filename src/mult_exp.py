@@ -25,7 +25,7 @@ def cbm_float_to_python_float(hex_bytes):
     # The sign bit is in the MSB of the mantissa; 0 means positive, 1 means negative
     sign = -1 if (mantissa & 0x80000000) else 1
 
-    mantissa |= 0x80000000 # TODO is this correct? shouldn't this be XOR to remove the sign bit
+    mantissa |= 0x80000000 # normalize mantissa to be in [0.5;1)
 
     #print(bin(mantissa), hex(mantissa))
 
@@ -418,3 +418,9 @@ if __name__ == "__main__":
 
 
     example_numbers_to_asm(3.1415, 1000, addr=0xc480)
+
+    print_error(cbm_float_to_python_float(
+        approx_mult_cbm(
+            python_float_to_cbm_float(100 - 0.5),
+            python_float_to_cbm_float(1),
+        )) + 20, 119.5)

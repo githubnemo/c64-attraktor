@@ -239,6 +239,11 @@ sta SCREEN_MASK_7
 !addr CONUPK = $BA8C
 
 
+; Set to 1 to use fast mult.
+!addr USE_FAST_MULT = $C800
+
+
+; initialize float with addr .name to 16 bit int value .value
 !macro set_int_param .name, .value {
     ldy#.value
     lda#0
@@ -275,10 +280,20 @@ sta SCREEN_MASK_7
 !macro fmult .other {
     lda#< .other
     ldy#> .other
-;    jsr FMULT
+    pha
+    lda #1
+    cmp USE_FAST_MULT
+    beq +
+    pla
+    jsr FMULT
+    jmp ++
++
+    pla
     jsr fast_mult
+++
 }
 
+; store float in fac1 in .other
 !macro movmf .other {
     ldx#< .other
     ldy#> .other
@@ -293,7 +308,8 @@ sta SCREEN_MASK_7
 
 
 
-
+lda #1
+sta USE_FAST_MULT
 
 +set_int_param FP_XCUR, 2
 +set_int_param FP_YCUR, 1
@@ -303,7 +319,7 @@ sta SCREEN_MASK_7
 +set_int_param FP_B, 28
 +set_int_param FP_C, 8
 
-+set_int_param FP_SCALE_Y, 15
++set_int_param FP_SCALE_Y, 25
 +set_int_param FP_OFFSET_X, 160
 
 ; initialize FP_C = 8/3
@@ -361,7 +377,7 @@ jsr MOVMF
 ;+movmf FP_TEMP ; expect 90 in FP_TEMP
 
 
-jmp main
+;jmp main
 
 
 ; testing fast float multiplication
@@ -450,6 +466,70 @@ sta $c489
 +movmf $c48a
 
 
+; calculate .f1 = .f1 / .f2
+!macro div2 .f1, .f2 {
+    lda #<.f2
+    ldy #>.f2
+    jsr MOVFM
+    lda #<.f1
+    ldy #>.f1
+    jsr FDIV
+    ldx #<.f1
+    ldy #>.f1
+    jsr MOVMF
+}
+
+
+
+; plot y = FP_A * x + FP_B
+; for x in [0; 100]
+!macro drawloop {
+    ; plot y = FP_A / FP_TEMP * x + FP_C / FP_TEMP
+    +set_int_param FP_XCUR, 0
+    +set_int_param FP_B, 40
+    +set_int_param FP_A, 2
+    +set_int_param FP_TEMP, 2
+    +div2 FP_A, FP_TEMP
+    ; set sign of FP_A
+    ;lda #$ff
+    ;sta $66
+    ;+movmf FP_A
+    +set_int_param FP_C, 5
+    +set_int_param FP_TEMP, 10
+    +div2 FP_C, FP_TEMP
+
+-
+    +float_to_fac1 FP_A
+    +fmult FP_XCUR
+    +fadd FP_B
+    +movmf FP_YCUR
+
+    +fac1_to_int16 INT_Y
+
+    ; increase x by step
+    +float_to_fac1 FP_XCUR
+    +fadd FP_C
+    +movmf FP_XCUR
+    +fac1_to_int16 INT_X
+
+    lda INT_X
+    sta $FB
+    lda INT_X + 1
+    sta $FC
+    ldy INT_Y
+    jsr blit_xy
+
+    lda INT_X
+    cmp #100
+    bcc -
+}
+
+lda #0
+sta USE_FAST_MULT
++drawloop
+lda #1
+sta USE_FAST_MULT
++drawloop
 
 jmp hang
 
@@ -494,10 +574,26 @@ fast_mult
     ;  mantissa is in $6A $6B $6C $6D
     ;  sign is in $6E (0 for positive, $FF (-1) for negative)
     ;
-    ;
+    pha
     ; load the 2nd number to ARG using CONUPK
     jsr CONUPK
 
+    ; If one of the exponents is zero, we can return early as the
+    ; result will be zero.
+    lda $61
+    beq +
+    lda $69
+    bne ++
++
+    ; Store zero exponent and keep mantissa intact as it will be
+    ; ignored with a zero exponent.
+    sta $61
+    pla
+    rts
+++
+
+    ; Multi-byte addition of the mantissas of ARG and FAC1 from least
+    ; to most significant to utilize the carry bit.
     clc
     lda $65
     adc $6D
@@ -511,20 +607,47 @@ fast_mult
     adc $6B
     sta $63
 
+    ; Most-significant byte of the mantissa always holds 1 as the MSB
+    ; to normalize the mantissa to [0.5;1). Mask the MSB since it is always
+    ; set to 1 and will overflow into the exponent (without signifying a
+    ; relevant overflow).
     lda $62
-    adc $6A
+    and #$7f
+    sta $fb
+    lda $6a
+    and #$7f
+    sta $fc
+    lda $fb
+    adc $fc
     sta $62
 
-    ; use a 16 bit addition for the exponent to handle overflows
-    ; properly. there's probably a way to do this in 8 bit as well.
-    ; e16 = (fb, fc)
+    ; If the masked calculation overflowed to the MSB we know that we carry
+    ; over to the exponent. In every case we need to set the MSB so that
+    ; we get a normalized mantissa.
+    clc
+    lda #$80
+    bit $62
+    bne +    ; set carry if bit 7 is set
+    sec
++
+    ; make sure that the MSB mantissa bit is always 1 (normalization)
+    lda $62
+    ora #$80
+    sta $62
+
+    ; This adds the two exponents, they'll most likely overflow.
+    ; we'll correct this by subtracting 128+ from the exponent below.
+    ; We're also adding the carry from the mantissa if there's one
+    ; implicitly (since the carry flag will be set if needed).
     lda $61
     adc $69
     sta $61
 
-    ; check if the addition carried over to the high bit. if it did not carry
-    ; over it is an indicator that we might be dealing with a zero
-    ; multiplcation.
+    ; Check if the addition carried over to the high bit. If it did not carry
+    ; over, we suspect that the exponent is < 128 which means that if we
+    ; subtract 128, we're underflowing the exponent value. In that case we
+    ; should simply set the exponent to 0 since it is the smallest value
+    ; we can use in a case of an underflow (2**(130 - 128)
     bcs .no_underflow
 
     ; to make sure, let's check if the 8 bit portion is also < 128, then
@@ -544,11 +667,6 @@ fast_mult
     sta $61
 .fi__
 
-    ; make sure that the MSB mantissa bit is always 1 (normalization)
-    lda $62
-    ora #$80
-    sta $62
-
     ; sign bit handling; XOR sign byte
     lda $66
     eor $6e
@@ -557,6 +675,7 @@ fast_mult
     lda #0
     sta $70
 
+    pla
     rts
 }
 
