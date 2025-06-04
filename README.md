@@ -105,7 +105,7 @@ But since it is always-set in RAM to simulate the mantissa it *should* be
 equivalent. At least the algorithm in assembler doesn't diverge much from
 the python implementation.
 
-Drawing `f(x) = 2/3 x + 0.5`:
+Drawing `f(x) = 2/3 x + 0.5`, fast mult implementation vs. `FMULT`:
 ![Drawing `f(x) = 2/3 x + 0.5`](./assets/fast_mul_test1.png)
 
 The original implementation uses a certain bias to correct the mantissa,
