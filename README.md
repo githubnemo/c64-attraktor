@@ -140,7 +140,8 @@ removed the main bottleneck and are still drawing the equation rather nicely
 considering the gain.
 
 System with fast multiplication, errors are visible but OK:
-![System with fast multiplication, errors are visible but OK](./assets/fast_mul_test2.png)
+
+https://github.com/user-attachments/assets/19cdffab-8066-43ab-95a2-81d99190ccaf
 
 What about the future? So what are the main offenders now?
 
