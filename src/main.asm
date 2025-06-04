@@ -124,11 +124,13 @@ clearscr_loop
 !addr FP_B  = $C430
 !addr FP_C  = $C460
 
-!addr FP_XCUR = $C4C0 ; 6 byte per float
+!addr FP_XCUR = $C4C0 ; 5 byte per float
 !addr FP_YCUR = $C4F0
 !addr FP_ZCUR = $C520
 
 !addr FP_TEMP     = $C550
+!addr FP_TEMP2    = $C555
+!addr FP_10       = $C55A
 !addr FP_SCALE_Y  = $C560
 !addr FP_OFFSET_X = $C570
 
@@ -253,7 +255,7 @@ sta SCREEN_MASK_7
     jsr MOVMF
 }
 
-!macro float_to_fac1 .name {
+!macro mem_to_fac1 .name {
     lda#< .name
     ldy#> .name
     jsr MOVFM
@@ -300,16 +302,28 @@ sta SCREEN_MASK_7
     jsr MOVMF
 }
 
+!macro fac1_to_mem .other {
+    +movmf .other
+}
+
 !macro fac1_to_int16 .location {
     jsr FACINX
     sty .location
     sta .location + 1
 }
 
-
-
-lda #1
-sta USE_FAST_MULT
+; calculate .f1 = .f1 / .f2
+!macro div2 .f1, .f2 {
+    lda #<.f2
+    ldy #>.f2
+    jsr MOVFM
+    lda #<.f1
+    ldy #>.f1
+    jsr FDIV
+    ldx #<.f1
+    ldy #>.f1
+    jsr MOVMF
+}
 
 +set_int_param FP_XCUR, 2
 +set_int_param FP_YCUR, 1
@@ -321,18 +335,27 @@ sta USE_FAST_MULT
 
 +set_int_param FP_SCALE_Y, 25
 +set_int_param FP_OFFSET_X, 160
++set_int_param FP_10, 10
 
 ; initialize FP_C = 8/3
 +set_int_param FP_TEMP, 3
-lda#< FP_TEMP
-ldy#> FP_TEMP
-jsr MOVFM
-lda#< FP_C
-ldy#> FP_C
-jsr FDIV
-ldx#< FP_C
-ldy#> FP_C
-jsr MOVMF
+; when doing fast mult we're going to sink into the first attractor
+; due to error accumulation, so we need to shift C just a tiny bit
+; so that we don't :)
+lda USE_FAST_MULT
+beq +
++set_int_param FP_TEMP2, 3
++div2 FP_TEMP2, FP_10
++mem_to_fac1 FP_TEMP
++fadd FP_TEMP2
++fac1_to_mem FP_TEMP
++
++div2 FP_C, FP_TEMP
+
+
+
+
+
 
 
 ; normally we would multiply delta-time (dt, e.g. 0.01)
@@ -347,13 +370,14 @@ jsr MOVMF
 ; - 1/(2**6) = 0.0156..
 ;
 ; So we just define the shift amount to set our dt.
-!set dt_shift = 6
+!set dt_shift = 7
 
 !macro multiply_dt_to_fac1 {
-    clc
+    sec
     lda $61
     sbc #dt_shift
     sta $61
+    clc
 }
 
 !macro save_int_gradient_to .target {
@@ -370,15 +394,18 @@ jsr MOVMF
 ; testing operation order of FSUB
 ;
 ;+set_int_param FP_TEMP, 100
-;+float_to_fac1 FP_A
+;+mem_to_fac1 FP_A
 ;lda #< FP_TEMP
 ;ldy #> FP_TEMP
 ;jsr FSUB
 ;+movmf FP_TEMP ; expect 90 in FP_TEMP
 
 
-;jmp main
 
+lda #1
+sta USE_FAST_MULT
+
+jmp main
 
 ; testing fast float multiplication
 ;
@@ -394,7 +421,7 @@ lda #0x56
 sta FP_A+3
 lda #0x00
 sta FP_A+4
-+float_to_fac1 FP_A
++mem_to_fac1 FP_A
 ; FP_B = -10
 ; ['0x84', '0xa0', '0x0', '0x0', '0x0']
 lda #0x84
@@ -424,7 +451,7 @@ lda #$56
 sta $c483
 lda #$00
 sta $c484
-+float_to_fac1 $c480
++mem_to_fac1 $c480
 lda #$87
 sta $c485
 lda #$48
@@ -451,7 +478,7 @@ lda #$56
 sta $c483
 lda #$00
 sta $c484
-+float_to_fac1 $c480
++mem_to_fac1 $c480
 lda #$8a
 sta $c485
 lda #$7a
@@ -466,18 +493,7 @@ sta $c489
 +movmf $c48a
 
 
-; calculate .f1 = .f1 / .f2
-!macro div2 .f1, .f2 {
-    lda #<.f2
-    ldy #>.f2
-    jsr MOVFM
-    lda #<.f1
-    ldy #>.f1
-    jsr FDIV
-    ldx #<.f1
-    ldy #>.f1
-    jsr MOVMF
-}
+
 
 
 
@@ -499,7 +515,7 @@ sta $c489
     +div2 FP_C, FP_TEMP
 
 -
-    +float_to_fac1 FP_A
+    +mem_to_fac1 FP_A
     +fmult FP_XCUR
     +fadd FP_B
     +movmf FP_YCUR
@@ -507,7 +523,7 @@ sta $c489
     +fac1_to_int16 INT_Y
 
     ; increase x by step
-    +float_to_fac1 FP_XCUR
+    +mem_to_fac1 FP_XCUR
     +fadd FP_C
     +movmf FP_XCUR
     +fac1_to_int16 INT_X
@@ -617,8 +633,10 @@ fast_mult
     lda $6a
     and #$7f
     adc $fb
-    ; if the MSB is set (i.e. not "positive") we know that we ought to add
-    ; ~0.5 to the sum (2**-1) so we set the result the byte to $7f.
+    ; if the MSB is set (i.e. not "positive") we know that we overflowed
+    ; to the 2**-1 (0.5) position, i.e. we're adding another 0.5 (we're
+    ; always adding 0.5, so that makes 0.5+0.5=1). Therefore we need to
+    ; set bit 0 of the exponent (2**0=1) in that case (i.e., set the carry).
     clc
     bpl +
     sec
@@ -668,6 +686,7 @@ fast_mult
     sta $70
 
     pla
+    clc
     rts
 }
 
@@ -678,7 +697,7 @@ xyz_step
     ; X_cur = X_cur + X_new * dt
     ;
     ; 1. Y_cur - X_cur
-    +float_to_fac1 FP_XCUR
+    +mem_to_fac1 FP_XCUR
     lda#< FP_YCUR
     ldy#> FP_YCUR
     jsr FSUB
@@ -727,7 +746,7 @@ xyz_step
     ; Y_cur = Y_cur + Y_new * dt
 
     ; (b - Z_cur)
-    +float_to_fac1 FP_ZCUR
+    +mem_to_fac1 FP_ZCUR
     +fsub FP_B
     ; FAC1 * X_cur
     +fmult FP_XCUR
@@ -735,7 +754,7 @@ xyz_step
     ;  ARG = FAC1 (= X_cur * (b - Z_cur))
     ;  FAC1 = Y_cur
     jsr MOVFA                ; ARG = FAC1
-    +float_to_fac1 FP_YCUR
+    +mem_to_fac1 FP_YCUR
     jsr FSUBT
     +save_int_gradient_to INT_Y_DT
     ; FAC1 * dt
@@ -752,15 +771,15 @@ xyz_step
     ; Z_cur = Z_cur + Z_new * dt
     ;
     ; 1. temp=(c * Z_cur)
-    +float_to_fac1 FP_C
+    +mem_to_fac1 FP_C
     +fmult FP_ZCUR
     +movmf FP_TEMP
     ; 2. (X_cur * Y_cur)
-    +float_to_fac1 FP_XCUR
+    +mem_to_fac1 FP_XCUR
     +fmult FP_YCUR
     ; 3. FAC1 - temp
     jsr MOVFA
-    +float_to_fac1 FP_TEMP
+    +mem_to_fac1 FP_TEMP
     jsr FSUBT
     +save_int_gradient_to INT_Z_DT
     ; 4. FAC1 * dt
@@ -778,7 +797,7 @@ xyz_step
     ;
     ; store int(y + z*10) as Y coordinate
     ; note that FAC1 contains Z_CUR at this point in time.
-    +fmult FP_A ; XXX abuses the fact that A=10
+    +fmult FP_10
     +fadd FP_YCUR
     +fmult FP_SCALE_Y
     ; normally we'd use +fac1_to_int16 but it assumes signed
