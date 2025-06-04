@@ -105,6 +105,7 @@ But since it is always-set in RAM to simulate the mantissa it *should* be
 equivalent. At least the algorithm in assembler doesn't diverge much from
 the python implementation.
 
+Drawing `f(x) = 2/3 x + 0.5`:
 ![Drawing `f(x) = 2/3 x + 0.5`](./assets/fast_mul_test1.png)
 
 The original implementation uses a certain bias to correct the mantissa,
@@ -136,8 +137,9 @@ Now the profile looks like this:
 
 `FMULT` - or rather `fast_mult` - is not even in the top 3 now. We effectively
 removed the main bottleneck and are still drawing the equation rather nicely
-considering the gain:
+considering the gain.
 
+System with fast multiplication, errors are visible but OK:
 ![System with fast multiplication, errors are visible but OK](./assets/fast_mul_test2.png)
 
 What about the future? So what are the main offenders now?
