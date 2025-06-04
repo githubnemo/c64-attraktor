@@ -487,7 +487,7 @@ sta $c489
     ; plot y = FP_A / FP_TEMP * x + FP_C / FP_TEMP
     +set_int_param FP_XCUR, 0
     +set_int_param FP_B, 40
-    +set_int_param FP_A, 2
+    +set_int_param FP_A, 5
     +set_int_param FP_TEMP, 2
     +div2 FP_A, FP_TEMP
     ; set sign of FP_A
@@ -589,6 +589,7 @@ fast_mult
     ; ignored with a zero exponent.
     sta $61
     pla
+    clc
     rts
 ++
 
@@ -607,31 +608,22 @@ fast_mult
     adc $6B
     sta $63
 
-    ; Most-significant byte of the mantissa always holds 1 as the MSB
-    ; to normalize the mantissa to [0.5;1). Mask the MSB since it is always
-    ; set to 1 and will overflow into the exponent (without signifying a
-    ; relevant overflow).
+    ; Both bytes will have the MSB set for normalization, so it will
+    ; always overflow, no matter if that is 'necessary' or not. Therefore
+    ; we will determine the overflow by masking the MSB and checking bit 7.
     lda $62
     and #$7f
     sta $fb
     lda $6a
     and #$7f
-    sta $fc
-    lda $fb
-    adc $fc
-    sta $62
-
-    ; If the masked calculation overflowed to the MSB we know that we carry
-    ; over to the exponent. In every case we need to set the MSB so that
-    ; we get a normalized mantissa.
+    adc $fb
+    ; if the MSB is set (i.e. not "positive") we know that we ought to add
+    ; ~0.5 to the sum (2**-1) so we set the result the byte to $7f.
     clc
-    lda #$80
-    bit $62
-    bne +    ; set carry if bit 7 is set
+    bpl +
     sec
 +
     ; make sure that the MSB mantissa bit is always 1 (normalization)
-    lda $62
     ora #$80
     sta $62
 
@@ -662,7 +654,7 @@ fast_mult
 .no_underflow
     ; subtract 129 from the added exponents
     lda $61
-    sec ; similar to clc for adc but the other way around
+    sec
     sbc #129
     sta $61
 .fi__
