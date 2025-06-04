@@ -204,10 +204,6 @@ sta SCREEN_MASK_7
 
 
 
-
-
-
-
 ; store FAC to RAM (X=Addr.LB, Y=Addr.HB)
 !addr MOVMF = $BBD4
 ; load FAC from RAM (A=Addr.LB, Y=Addr.HB)
@@ -355,9 +351,6 @@ beq +
 
 
 
-
-
-
 ; normally we would multiply delta-time (dt, e.g. 0.01)
 ; to our differential equation results to get the next
 ; X/Y/Z values. We can save a multiplication here if we
@@ -405,6 +398,7 @@ beq +
 lda #1
 sta USE_FAST_MULT
 
+; Comment the following jump to reach the fast mult test drawing code.
 jmp main
 
 ; testing fast float multiplication
@@ -493,17 +487,13 @@ sta $c489
 +movmf $c48a
 
 
-
-
-
-
 ; plot y = FP_A * x + FP_B
 ; for x in [0; 100]
 !macro drawloop {
     ; plot y = FP_A / FP_TEMP * x + FP_C / FP_TEMP
     +set_int_param FP_XCUR, 0
     +set_int_param FP_B, 40
-    +set_int_param FP_A, 5
+    +set_int_param FP_A, 3
     +set_int_param FP_TEMP, 2
     +div2 FP_A, FP_TEMP
     ; set sign of FP_A
@@ -548,6 +538,8 @@ sta USE_FAST_MULT
 +drawloop
 
 jmp hang
+; End of fast mult test drawing code
+
 
 
 main
@@ -566,7 +558,6 @@ draw_loop
     dec $FA
     ;bne draw_loop
     jmp draw_loop
-
 
 
 
