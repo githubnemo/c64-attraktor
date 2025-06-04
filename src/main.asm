@@ -370,7 +370,7 @@ beq +
 ; - 1/(2**6) = 0.0156..
 ;
 ; So we just define the shift amount to set our dt.
-!set dt_shift = 7
+!set dt_shift = 6
 
 !macro multiply_dt_to_fac1 {
     sec
@@ -1216,6 +1216,24 @@ play_sounds
     jsr reset_screen
 
 .r_not_pressed
+    lda #0b11111011
+    sta $DC00
+    lda $DC01
+    and #0b00100000
+    bne .f_not_pressed
+
+    ; Toggle fast multiplication when F is pressed
+    lda USE_FAST_MULT
+    bne +
+    lda #1
+    sta USE_FAST_MULT
+    jmp ++
++
+    lda #0
+    sta USE_FAST_MULT
+++
+
+.f_not_pressed
     lda play_duration_voice1
     clc
     cmp #2
