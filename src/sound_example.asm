@@ -158,7 +158,7 @@ loop2:  lda pulseinit,x	; pulsehigh ???
 		sta $d405,y		; attack
 		lda #$01
 		sta duration1,x
-		lda voiceinit,x
+		lda voiceinit,x ; just do *voicepointer = *voiceinit but in a weird way!
 		sta voice1pointer,x
 		lda voiceinit+3,x
 		sta voice1pointer+3,x
@@ -226,8 +226,6 @@ sidvalues:
 !addr CONTROL_VOICE1 = $d404
 !addr ATTACK_DUR_VOICE1 = $d405
 !addr SUSTAIN_REL_VOICE1 = $d406
-!addr WAV_DUTY_LO_VOICE1 = $d402
-!addr WAV_DUTY_HI_VOICE1 = $d403
 
 !addr FREQ_LO_VOICE2 = $d407
 !addr FREQ_HI_VOICE2 = $d408
@@ -241,28 +239,26 @@ sidvalues:
 !addr ATTACK_DUR_VOICE3 = $d413
 !addr SUSTAIN_REL_VOICE3 = $d414
 
-!addr FILTER_CUTOFF_HI = $d416
-!addr FILTER_CUTOFF_LO = $d415
 
 play:
         ldx #$00
 		dec duration1
-		beq fill_voice_1             ; once voice 1 is finished, fill in new data
+		beq branch1
 		lda duration1
 		cmp #hardrestartcounter
-		bcs branch2                  ; branch to branch2 if duration1 > restartcounter
+		bcs branch2
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
-		stx CONTROL_VOICE1           ; reset voice1 to 0
+		stx CONTROL_VOICE1
 		jmp branch1109
 
-fill_voice_1:
+branch1:
         ldy #$00			//voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
 		lda (voice1pointer),y
-		beq restartmusic       ; detects $0000 in voice1list
+		beq restartmusic
 		sta sound1pointer+1
 		iny
 		lda (voice1pointer),y
@@ -300,8 +296,7 @@ loop3:
 		sta CONTROL_VOICE3  ; set all voices to 'test'?
 		rts
 
-branch2:
-        ldy sound1index
+branch2:ldy sound1index
 		lda (sound1pointer),y
 		beq branch1109
 		sta FREQ_HI_VOICE1
@@ -363,10 +358,10 @@ branch115e:
 		tay
 		lda (sound3pointer),y
 branch1166:
-        sta FILTER_CUTOFF_HI		//filter
+        sta $d416		//filter
 		iny
 		lda (sound3pointer),y
-		sta CONTROL_VOICE3		//wave
+		sta $d412		//wave
 		iny
 		lda (sound3pointer),y
 		iny
@@ -375,9 +370,9 @@ branch1166:
 		adc note3
 		tay
 		lda freqhi,y
-		sta FREQ_HI_VOICE3
+		sta $d40f
 		lda freqlo,y
-		sta FREQ_LO_VOICE3
+		sta $d40e
 sub_fill_voice_2:
         dec duration2			//voice2
 		beq fill_voice_2
@@ -388,8 +383,7 @@ sub_fill_voice_2:
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-fill_voice_2:
-        ldy #$00
+fill_voice_2:	ldy #$00
 		lda (voice2pointer),y
 		sta sound2pointer
 		iny
@@ -439,8 +433,7 @@ branch11e5:	iny
 		lda (sound2pointer),y
 
 
-branch11ed:
-        sta CONTROL_VOICE2		//wave
+branch11ed:	sta $d40b		//wave
 		lda pulsecontrol
 		beq branch1200
 		iny
@@ -520,7 +513,6 @@ freqhi:
 //format voice1 (Drumtrack):
 //.byte SR Value
 //.byte Freqhi,wave
-// [...]
 //.byte Freqhi,wave - if freqhi=0 -> end of sound
 
 basedrum:					//basedrum
