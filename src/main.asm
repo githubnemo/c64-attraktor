@@ -1565,7 +1565,7 @@ fill_voice_3:
 		sta SUSTAIN_REL_VOICE3		//sr
 		sty ATTACK_DUR_VOICE3		//ad
 		iny
-		sty CONTROL_VOICE3          ; sync with voice 1
+		sty CONTROL_VOICE3          ; sync with voice 2
 		sty sound3index
 		jmp sub_fill_voice_2
 
