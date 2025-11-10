@@ -118,6 +118,8 @@ clearscr_loop
 ; when base addr. = $2000, then 0b0 is bit 0 at $2000, 0b1 is bit 1 at $2000.
 ;
 
+; use a zero page memory for this state for fastness
+!addr SND_PATTERN_SWITCHED = $88
 
 
 !addr FP_A  = $C400
@@ -170,6 +172,10 @@ lda#0b01000000
 sta SCREEN_MASK_6
 lda#0b10000000
 sta SCREEN_MASK_7
+
+
+lda #0
+sta SND_PATTERN_SWITCHED
 
 
 !macro lshift_16bit .hb, .lb {
@@ -1018,14 +1024,14 @@ _y_shift_local
 
 voiceinit
     !word voice1
-    !word voice2loop_maj ;voice2
-    !word voice3loop_maj ;voice3
+    !word voice2loop_min ;voice2
+    !word voice3loop_min ;voice3
 
 
 voiceloop
     !word voice1loop
-    !word voice2loop_maj
-    !word voice3loop_maj
+    !word voice2loop_min
+    !word voice3loop_min
 
 
 ; initial pulse wave duty cycles for each voice
@@ -1465,7 +1471,47 @@ sidvalues:
 !addr SUSTAIN_REL_VOICE3 = $d414
 
 
+!set VOICE2_PTR_OFFSET = voice2loop_maj - voice2loop_min
+
 play:
+
+        lda INT_X
+        cmp #$80
+        bcc +
+;        jmp ++
+        ; X >= #$80
+        lda SND_PATTERN_SWITCHED
+        bne ++ ; jump if SND_PATTERN_SWITCHED != 0
+        ; SND_PATTERN_SWITCHED == 0
+        +SetBorderColor 2
+        clc
+        lda #VOICE2_PTR_OFFSET
+        adc voice2pointer
+        sta voice2pointer
+        lda #0
+        adc voice2pointer+1
+        sta voice2pointer+1
+        lda #1
+        sta SND_PATTERN_SWITCHED
+        jmp ++
++
+        ; X < #$80
+        +SetBorderColor 1
+        lda SND_PATTERN_SWITCHED
+        beq ++
+        sec
+        lda voice2pointer
+        sbc #VOICE2_PTR_OFFSET
+        sta voice2pointer
+        lda voice2pointer+1
+        sbc #0
+        sta voice2pointer+1
+        lda #0
+        sta SND_PATTERN_SWITCHED
+++
+
+
+
         ldx #$00
 		dec duration1
 		beq branch1
@@ -2034,6 +2080,7 @@ voice2loop_maj:
 ; !byte $24,$34
 ; !word silence02
 ; !byte $0c,$00
+
 
 
 //------------------------------------------------------------
