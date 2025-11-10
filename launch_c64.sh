@@ -5,6 +5,7 @@ readonly script_dir
 
 X64SC=${X64SC:-x64sc}
 
+VICE_DATA_PREFIX=${VICE_DATA_PREFIX:-"/usr/local/share/vice"}
 
 # NOTE: RESTORE is ESC + Pg Up
 #
@@ -18,9 +19,9 @@ X64SC=${X64SC:-x64sc}
 # .PRG files (actually CBM files) directly from the host system, skipping
 # the creating of d64 disk images. 1 means to inject into RAM.
 "${X64SC}" \
-    -kernal "$script_dir"/ROM/vice-3.8/data/C64/kernal-901227-03.bin \
-    -basic "$script_dir"/ROM/vice-3.8/data/C64/basic-901226-01.bin \
-    -chargen "$script_dir"/ROM/vice-3.8/data/C64/chargen-906143-02.bin \
+    -kernal "$VICE_DATA_PREFIX"/C64/kernal-901227-03.bin \
+    -basic "$VICE_DATA_PREFIX"/C64/basic-901226-01.bin \
+    -chargen "$VICE_DATA_PREFIX"/C64/chargen-906143-02.bin \
     -autostartprgmode 1 \
     -autostart-warp \
     +confirmonexit \
