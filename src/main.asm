@@ -1018,14 +1018,14 @@ _y_shift_local
 
 voiceinit
     !word voice1
-    !word voice2
-    !word voice3
+    !word voice2loop_maj ;voice2
+    !word voice3loop_maj ;voice3
 
 
 voiceloop
     !word voice1loop
-    !word voice2loop
-    !word voice3loop
+    !word voice2loop_maj
+    !word voice3loop_maj
 
 
 ; initial pulse wave duty cycles for each voice
@@ -1768,7 +1768,7 @@ silence02:					//silence
 !byte $08,$00,$ff
 
 
-chord:
+chord_min:
 !byte $6a,$01
 !word novibrato
 !byte $41,$00,$04,$00
@@ -1777,11 +1777,27 @@ chord:
 !byte $40,$60,$04,$07
 !byte $40,$80,$04,$07
 !byte $40,$60,$04,$07
-!byte $40,$40,$04,$0c
-!byte $40,$20,$04,$0c
+!byte $40,$40,$04,$0f
+!byte $40,$20,$04,$0f
+!byte $40,$00,$04,$0f
 !byte $40,$00,$04,$0c
-!byte $40,$00,$04,$00
-!byte $40,$20,$04,$00
+!byte $40,$20,$04,$0c
+!byte $00,$0c
+
+chord_maj:
+!byte $6a,$01
+!word novibrato
+!byte $41,$00,$04,$00
+!byte $41,$20,$04,$00
+!byte $40,$40,$04,$00
+!byte $40,$60,$04,$07
+!byte $40,$80,$04,$07
+!byte $40,$60,$04,$07
+!byte $40,$40,$04,$10
+!byte $40,$20,$04,$10
+!byte $40,$00,$04,$10
+!byte $40,$00,$04,$0c
+!byte $40,$20,$04,$0c
 !byte $00,$0c
 
 chord1:
@@ -1932,31 +1948,97 @@ voice1loop:
 !word $0000
 //------------------------------------------------------------
 voice2:
-voice2loop:
+voice2loop_min:
 
 //format .word soundoffset, .byte duration,note
 
-
-!word silence02
-!byte $0c,$00
-!word chord
+!word chord_min
 !byte $24,$34
-
-!word chord1
-!byte $30,$34
-
 !word silence02
 !byte $0c,$00
-!word chord
-!byte $24,$2d
 
-!word chord2
-!byte $30,$2d
+!word chord_min
+!byte $24,$34
+!word silence02
+!byte $0c,$00
+
+!word chord_maj
+!byte $24,$32
+!word silence02
+!byte $0c,$00
+
+!word chord_min
+!byte $24,$34
+!word silence02
+!byte $0c,$00
+
+; !word chord_min
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_min
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_maj
+; !byte $24,$32
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_min
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
+
+
+voice2loop_maj:
+
+!word chord_maj
+!byte $24,$34
+!word silence02
+!byte $0c,$00
+
+!word chord_maj
+!byte $24,$34
+!word silence02
+!byte $0c,$00
+
+!word chord_maj
+!byte $24,$2f
+!word silence02
+!byte $0c,$00
+
+!word chord_maj
+!byte $24,$34
+!word silence02
+!byte $0c,$00
+
+; !word chord_maj
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_maj
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_maj
+; !byte $24,$2f
+; !word silence02
+; !byte $0c,$00
+
+; !word chord_maj
+; !byte $24,$34
+; !word silence02
+; !byte $0c,$00
 
 
 //------------------------------------------------------------
 voice3:
-voice3loop:
+voice3loop_min:
 
 //format .word soundoffset, .byte duration,note
 
@@ -1965,24 +2047,98 @@ voice3loop:
 !word filterbass
 !byte $12,$1c
 !word filterbass
-!byte $0c,$1a
+!byte $0c,$15
 
 !word filterbass
-!byte $12,$17
+!byte $12,$18
 !word silence03
 !byte $1e,$00
 
 !word filterbass
-!byte $12,$15
+!byte $12,$1a
 !word filterbass
-!byte $12,$15
+!byte $12,$1a
 !word filterbass
 !byte $0c,$17
 
 !word filterbass
-!byte $12,$10
+!byte $12,$1c
 !word silence03
 !byte $1e,$00
+
+; !word filterbass
+; !byte $12,$1c
+; !word filterbass
+; !byte $12,$1c
+; !word filterbass
+; !byte $0c,$15
+
+; !word filterbass
+; !byte $12,$18
+; !word silence03
+; !byte $1e,$00
+
+; !word filterbass
+; !byte $12,$1a
+; !word filterbass
+; !byte $12,$1a
+; !word filterbass
+; !byte $0c,$17
+
+; !word filterbass
+; !byte $12,$1c
+; !word silence03
+; !byte $1e,$00
+
+
+voice3loop_maj:
+!word filterbass
+!byte $12,$1c
+!word filterbass
+!byte $12,$1c
+!word filterbass
+!byte $0c,$15
+
+!word filterbass
+!byte $12,$19
+!word silence03
+!byte $1e,$00
+
+!word filterbass
+!byte $12,$1b
+!word filterbass
+!byte $12,$1b
+!word filterbass
+!byte $0c,$17
+
+!word filterbass
+!byte $12,$1c
+!word silence03
+!byte $1e,$00
+
+; !word filterbass
+; !byte $12,$1c
+; !word filterbass
+; !byte $12,$1c
+; !word filterbass
+; !byte $0c,$15
+
+; !word filterbass
+; !byte $12,$19
+; !word silence03
+; !byte $1e,$00
+
+; !word filterbass
+; !byte $12,$1b
+; !word filterbass
+; !byte $12,$1b
+; !word filterbass
+; !byte $0c,$17
+
+; !word filterbass
+; !byte $12,$1c
+; !word silence03
+; !byte $1e,$00
 
 
 
