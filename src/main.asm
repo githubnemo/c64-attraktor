@@ -1472,13 +1472,13 @@ sidvalues:
 
 
 !set VOICE2_PTR_OFFSET = voice2loop_maj - voice2loop_min
+!set VOICE3_PTR_OFFSET = voice3loop_maj - voice3loop_min
 
 play:
 
         lda INT_X
         cmp #$80
         bcc +
-;        jmp ++
         ; X >= #$80
         lda SND_PATTERN_SWITCHED
         bne ++ ; jump if SND_PATTERN_SWITCHED != 0
@@ -1491,6 +1491,13 @@ play:
         lda #0
         adc voice2pointer+1
         sta voice2pointer+1
+        clc
+        lda #VOICE3_PTR_OFFSET
+        adc voice3pointer
+        sta voice3pointer
+        lda #0
+        adc voice3pointer+1
+        sta voice3pointer+1
         lda #1
         sta SND_PATTERN_SWITCHED
         jmp ++
@@ -1499,6 +1506,7 @@ play:
         +SetBorderColor 1
         lda SND_PATTERN_SWITCHED
         beq ++
+        ; voice2pointer -= VOICE2_PTR_OFFSET
         sec
         lda voice2pointer
         sbc #VOICE2_PTR_OFFSET
@@ -1506,6 +1514,14 @@ play:
         lda voice2pointer+1
         sbc #0
         sta voice2pointer+1
+        ; voice3pointer -= VOICE3_PTR_OFFSET
+        sec
+        lda voice3pointer
+        sbc #VOICE3_PTR_OFFSET
+        sta voice3pointer
+        lda voice3pointer+1
+        sbc #0
+        sta voice3pointer+1
         lda #0
         sta SND_PATTERN_SWITCHED
 ++
