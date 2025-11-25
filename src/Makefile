@@ -1,11 +1,11 @@
 CPU = 6502
 C1541 = c1541
 X64 = ../launch_c64.sh
-OUTPUT = "myprg.prg"
+OUTPUT = "attraktor.prg"
 LABEL_FILE = "symbols.list"
 
-DISKFILENAME = my.d64
-DISKNAME = myprg
+DISKFILENAME = attraktor.d64
+DISKNAME = attraktor
 ID = 17
 
 AS = acme

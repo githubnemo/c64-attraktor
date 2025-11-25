@@ -118,10 +118,11 @@ clearscr_loop
 ; when base addr. = $2000, then 0b0 is bit 0 at $2000, 0b1 is bit 1 at $2000.
 ;
 
-; use a zero page memory for this state for fastness
+; ZERO PAGE LAYOUT
+!addr KEY_PRESS_TIMER = $87
 !addr SND_PATTERN_SWITCHED = $88
 
-
+; MEMORY LAYOUT
 !addr FP_A  = $C400
 !addr FP_B  = $C430
 !addr FP_C  = $C460
@@ -176,6 +177,7 @@ sta SCREEN_MASK_7
 
 lda #0
 sta SND_PATTERN_SWITCHED
+sta KEY_PRESS_TIMER
 
 
 !macro lshift_16bit .hb, .lb {
@@ -401,7 +403,7 @@ beq +
 
 
 
-lda #1
+lda #0
 sta USE_FAST_MULT
 
 ; Comment the following jump to reach the fast mult test drawing code.
@@ -1199,9 +1201,26 @@ reset_screen
 }
 
 
-!zone play_sounds {
-play_sounds
+!zone handle_key_presses {
 
+!macro set_key_press_timer {
+    lda #10  ; number of ISR invocations to wait between key press checks
+    sta KEY_PRESS_TIMER
+}
+
+handle_key_presses
+    ; we wait a fixed amount of ISR invocations between key presses
+    ; to debounce.
+    lda KEY_PRESS_TIMER
+    beq .no_wait
+
+    dec KEY_PRESS_TIMER
+    rts
+
+.no_wait
+
+    ; 'R' key press handler
+    ;
     ; we hijack this interrupt for checking if the user pressed R
     ; to reset the program. lazyness :)
     lda #0b11111011
@@ -1211,15 +1230,20 @@ play_sounds
     and #0b00000010
     bne .r_not_pressed
 
+    +set_key_press_timer
     jsr reset_screen
 
 .r_not_pressed
     lda #0b11111011
+
+    ; 'F' key press handler
+    ;
     sta $DC00
     lda $DC01
     and #0b00100000
     bne .f_not_pressed
 
+    +set_key_press_timer
     ; Toggle fast multiplication when F is pressed
     lda USE_FAST_MULT
     bne +
@@ -1232,6 +1256,9 @@ play_sounds
 ++
 
 .f_not_pressed
+
+    ; 'M' key press handler
+    ;
     lda play_duration_voice1
     clc
     cmp #2
@@ -1248,7 +1275,9 @@ play_sounds
     and #0b00010000
     bne .addr_no_m
 
-    ; M key handler
+    ; M key pressed
+    +set_key_press_timer
+
     ; init playing of sound
     clc
     lda INT_M
@@ -1270,6 +1299,7 @@ play_sounds
     bne .no_key
 
     ; N key handler
+    +set_key_press_timer
     lda #1
     sta play_duration_voice2
     jsr .play_sound_voice2
@@ -1321,7 +1351,6 @@ play_sounds
     sta ATTACK_DUR_VOICE2
 
     rts
-
 }
 
 
@@ -1337,6 +1366,7 @@ vic_rst_irq
     lda $d012
     sta timer
 ;    jsr play_sounds
+    jsr handle_key_presses
     jsr musicplay
     lda $d012
     sec
