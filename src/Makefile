@@ -32,5 +32,3 @@ run: d64
 clean:
 	rm -f $(OUTPUT) $(DISKFILENAME)
 
-
-

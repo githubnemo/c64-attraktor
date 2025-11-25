@@ -121,6 +121,7 @@ clearscr_loop
 ; ZERO PAGE LAYOUT
 !addr KEY_PRESS_TIMER = $87
 !addr SND_PATTERN_SWITCHED = $88
+!addr TURN_SOUND_ON = $89
 
 ; MEMORY LAYOUT
 !addr FP_A  = $C400
@@ -178,6 +179,7 @@ sta SCREEN_MASK_7
 lda #0
 sta SND_PATTERN_SWITCHED
 sta KEY_PRESS_TIMER
+sta TURN_SOUND_ON
 
 
 !macro lshift_16bit .hb, .lb {
@@ -1023,6 +1025,7 @@ _y_shift_local
 !addr FILTER_CUTOFF_HI = $d416
 !addr FILTER_CUTOFF_LO = $d415
 
+!addr SID_MAIN_CONTROL = $d418
 
 voiceinit
     !word voice1
@@ -1150,26 +1153,6 @@ init_sid
 }
 
 
-;
-;    		CIA 1 Port B ($DC01) 	Joy 2
-;   		PB7 	PB6 	PB5 	PB4 	PB3 	PB2 	PB1 	PB0
-;   CIA1
-;
-;   Port A
-;   ($DC00)
-;   PA7 	STOP 	Q 	C= 	SPACE 	2 	CTRL 	<- 	1
-;   PA6 	/ 	^ 	= 	RSHIFT 	HOME 	    ; 	* 	£
-;   PA5 	, 	@ 	: 	. 	- 	L 	P 	    +
-;   PA4 	N 	O 	K 	M 	0 	J 	I 	    9 	Fire
-;   PA3 	V 	U 	H 	B 	8 	G 	Y 	    7 	Right
-;   PA2 	X 	T 	F 	C 	6 	D 	R 	    5 	Left
-;   PA1 	LSHIFT 	E 	S 	Z 	4 	A 	    W 	3 	Down
-;   PA0 	CRSRDN 	F5 	F3 	F1 	F7 	CRSRRT 	RETURN 	DELETE 	Up
-;   Joy 1 					Fire 	Right 	Left 	Down 	Up
-;
-;   https://www.c64-wiki.com/wiki/Keyboard
-
-
 ; sub-routine to clear the screen and reset the state of the drawing
 !zone reset_screen {
 reset_screen
@@ -1200,12 +1183,42 @@ reset_screen
     rts
 }
 
+;
+;    		CIA 1 Port B ($DC01) 	Joy 2
+;   		PB7 	PB6 	PB5 	PB4 	PB3 	PB2 	PB1 	PB0
+;   CIA1
+;
+;   Port A
+;   ($DC00)
+;   PA7 	STOP 	Q 	C= 	SPACE 	2 	CTRL 	<- 	1
+;   PA6 	/ 	^ 	= 	RSHIFT 	HOME 	    ; 	* 	£
+;   PA5 	, 	@ 	: 	. 	- 	L 	P 	    +
+;   PA4 	N 	O 	K 	M 	0 	J 	I 	    9 	Fire
+;   PA3 	V 	U 	H 	B 	8 	G 	Y 	    7 	Right
+;   PA2 	X 	T 	F 	C 	6 	D 	R 	    5 	Left
+;   PA1 	LSHIFT 	E 	S 	Z 	4 	A 	    W 	3 	Down
+;   PA0 	CRSRDN 	F5 	F3 	F1 	F7 	CRSRRT 	RETURN 	DELETE 	Up
+;   Joy 1 					Fire 	Right 	Left 	Down 	Up
+;
+;   https://www.c64-wiki.com/wiki/Keyboard
 
 !zone handle_key_presses {
 
 !macro set_key_press_timer {
     lda #10  ; number of ISR invocations to wait between key press checks
     sta KEY_PRESS_TIMER
+}
+
+!macro turn_sound_on {
+    lda SID_MAIN_CONTROL
+    ora #0b1111
+    sta SID_MAIN_CONTROL
+}
+
+!macro turn_sound_off {
+    lda SID_MAIN_CONTROL
+    and #0b11110000
+    sta SID_MAIN_CONTROL
 }
 
 handle_key_presses
@@ -1218,6 +1231,75 @@ handle_key_presses
     rts
 
 .no_wait
+
+    ; default is to turn sound off after reading the keys.
+    lda #0
+    sta TURN_SOUND_ON
+
+    ; 'Q' key press handler
+    ;
+    ; activate sequence 1 for left
+    lda #0b01111111
+    sta $DC00
+
+    lda $DC01
+    and #0b01000000
+    bne .q_not_pressed
+
+    +set_key_press_timer
+
+    ; TODO handle q
+    lda #1
+    sta TURN_SOUND_ON
+
+.q_not_pressed
+
+    ; 'A' key press handler
+    ;
+    ; activate sequence 2 for left
+    lda #0b11111101
+    sta $DC00
+
+    lda $DC01
+    and #0b00000100
+    bne .a_not_pressed
+
+    +set_key_press_timer
+
+    ; TODO handle a
+    lda #1
+    sta TURN_SOUND_ON
+
+.a_not_pressed
+
+    ; 'Z' key press handler
+
+    lda #0b11111101
+    sta $DC00
+
+    lda $DC01
+    and #0b00010000
+    bne .z_not_pressed
+
+    +set_key_press_timer
+
+    ; TODO handle z
+    lda #1
+    sta TURN_SOUND_ON
+
+.z_not_pressed
+
+
+    ; we now know if we need to toggle sound on or not.
+    ; let's do that now!
+    lda TURN_SOUND_ON
+    beq +
+    +turn_sound_on
+    jmp ++
++
+    +turn_sound_off
+++
+
 
     ; 'R' key press handler
     ;
