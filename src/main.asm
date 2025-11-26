@@ -1029,14 +1029,14 @@ _y_shift_local
 
 voiceinit
     !word voice1
-    !word voice2loop_min ;voice2
-    !word voice3loop_min ;voice3
+    !word voice2loop_default ;voice2
+    !word voice3loop_default ;voice3
 
 
 voiceloop
     !word voice1loop
-    !word voice2loop_min
-    !word voice3loop_min
+    !word voice2loop_default
+    !word voice3loop_default
 
 
 ; initial pulse wave duty cycles for each voice
@@ -1583,8 +1583,8 @@ sidvalues:
 !addr SUSTAIN_REL_VOICE3 = $d414
 
 
-!set VOICE2_PTR_OFFSET = voice2loop_maj - voice2loop_min
-!set VOICE3_PTR_OFFSET = voice3loop_maj - voice3loop_min
+!set VOICE2_PTR_OFFSET = voice2loop_maj - voice2loop_default
+!set VOICE3_PTR_OFFSET = voice3loop_maj - voice3loop_default
 
 play:
 
@@ -2122,6 +2122,7 @@ voice1loop:
 !word $0000
 //------------------------------------------------------------
 voice2:
+voice2loop_default:
 voice2loop_min:
 
 //format .word soundoffset, .byte duration,note
@@ -2213,7 +2214,8 @@ voice2loop_maj:
 
 //------------------------------------------------------------
 voice3:
-voice3loop_min:
+voice3loop_default:
+voice3loop_left_1:
 
 //format .word soundoffset, .byte duration,note
 
@@ -2267,6 +2269,7 @@ voice3loop_min:
 
 
 voice3loop_maj:
+voice3loop_right_1:
 !word filterbass
 !byte $12,$1c
 !word filterbass
