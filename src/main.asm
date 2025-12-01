@@ -92,7 +92,7 @@ colorfill_loop
    lda#$20
    sta$fc
 
-   lda#0
+   lda#$00
 
 clearscr_loop
    sta($fb),y
@@ -122,6 +122,8 @@ clearscr_loop
 !addr KEY_PRESS_TIMER = $87
 !addr SND_PATTERN_SWITCHED = $88
 !addr TURN_SOUND_ON = $89
+!addr RNG_STATE_LO = $90
+!addr RNG_STATE_HI = $91
 
 ; MEMORY LAYOUT
 !addr FP_A  = $C400
@@ -148,32 +150,63 @@ clearscr_loop
 !addr SCREEN_ADDR = $C630
 
 ; LUT for ORing patterns
-!addr SCREEN_MASK_0 = $C640
-!addr SCREEN_MASK_1 = $C641
-!addr SCREEN_MASK_2 = $C642
-!addr SCREEN_MASK_3 = $C643
-!addr SCREEN_MASK_4 = $C644
-!addr SCREEN_MASK_5 = $C645
-!addr SCREEN_MASK_6 = $C646
-!addr SCREEN_MASK_7 = $C647
+!addr SCREEN_MASK_OR_0 = $C640
+!addr SCREEN_MASK_OR_1 = $C641
+!addr SCREEN_MASK_OR_2 = $C642
+!addr SCREEN_MASK_OR_3 = $C643
+!addr SCREEN_MASK_OR_4 = $C644
+!addr SCREEN_MASK_OR_5 = $C645
+!addr SCREEN_MASK_OR_6 = $C646
+!addr SCREEN_MASK_OR_7 = $C647
 
 
 lda#0b00000001
-sta SCREEN_MASK_0
+sta SCREEN_MASK_OR_0
 lda#0b00000010
-sta SCREEN_MASK_1
+sta SCREEN_MASK_OR_1
 lda#0b00000100
-sta SCREEN_MASK_2
+sta SCREEN_MASK_OR_2
 lda#0b00001000
-sta SCREEN_MASK_3
+sta SCREEN_MASK_OR_3
 lda#0b00010000
-sta SCREEN_MASK_4
+sta SCREEN_MASK_OR_4
 lda#0b00100000
-sta SCREEN_MASK_5
+sta SCREEN_MASK_OR_5
 lda#0b01000000
-sta SCREEN_MASK_6
+sta SCREEN_MASK_OR_6
 lda#0b10000000
-sta SCREEN_MASK_7
+sta SCREEN_MASK_OR_7
+
+; LUT for ANDing patterns
+!addr SCREEN_MASK_AND_0 = $C648
+!addr SCREEN_MASK_AND_1 = $C649
+!addr SCREEN_MASK_AND_2 = $C64A
+!addr SCREEN_MASK_AND_3 = $C64B
+!addr SCREEN_MASK_AND_4 = $C64C
+!addr SCREEN_MASK_AND_5 = $C64D
+!addr SCREEN_MASK_AND_6 = $C64E
+!addr SCREEN_MASK_AND_7 = $C64F
+
+
+lda#0b11111110
+sta SCREEN_MASK_AND_0
+lda#0b11111101
+sta SCREEN_MASK_AND_1
+lda#0b11111011
+sta SCREEN_MASK_AND_2
+lda#0b11110111
+sta SCREEN_MASK_AND_3
+lda#0b11101111
+sta SCREEN_MASK_AND_4
+lda#0b11011111
+sta SCREEN_MASK_AND_5
+lda#0b10111111
+sta SCREEN_MASK_AND_6
+lda#0b01111111
+sta SCREEN_MASK_AND_7
+
+
+jsr rng_seed
 
 
 lda #0
@@ -565,6 +598,11 @@ draw_loop
 
     jsr blit_xy
 
+    jsr rng_next
+    jsr clear_rng_pixel
+    jsr rng_next
+    jsr clear_rng_pixel
+
     dec $FA
     ;bne draw_loop
     jmp draw_loop
@@ -877,6 +915,54 @@ xyz_step
 }
 
 
+!zone rng {
+    ; linear congruential generator
+    ; X(n+1) = (a * X(n) + c) mod m
+    ; a = 5
+    ; c = 1
+    ; m = 65536 (2**16)
+rng_seed
+    ; read current horizontal scanline position from VIC-II
+    lda $d012
+    sta RNG_STATE_LO
+    lda #$00
+    sta RNG_STATE_HI
+    rts
+
+rng_next
+    ; X(n+1) = (5 * X(n) + 1) mod 65536
+    ; compute 5 * X(n) as (4 + 1) * X(n)
+    lda RNG_STATE_LO
+    sta $fb
+    lda RNG_STATE_HI
+    sta $fc
+
+    ; X(n) << 2
+    +lshift_16bit $fc, $fb
+    +lshift_16bit $fc, $fb
+
+    ; add X(n)
+    clc
+    lda RNG_STATE_LO
+    adc $fb
+    sta RNG_STATE_LO
+    lda RNG_STATE_HI
+    adc $fc
+    sta RNG_STATE_HI
+
+    ; add 1
+    clc
+    lda RNG_STATE_LO
+    adc #1
+    sta RNG_STATE_LO
+    lda RNG_STATE_HI
+    adc #0
+    sta RNG_STATE_HI
+
+    rts
+
+}
+
 
 blit_xy
     ; parameters: x (16 bit), y (8 bit)
@@ -990,7 +1076,49 @@ _y_shift_local
     sta $FC
     ldy #0
     lda ($FB), Y
-    ora SCREEN_MASK_0, X
+    ora SCREEN_MASK_OR_0, X
+    sta ($FB), Y
+
+    rts
+
+
+
+clear_rng_pixel
+    ; parameters: RNG_STATE_LO, RNG_STATE_HI as linear screen memory offset
+    ;
+    ; clobbers SCREEN_ADDR global, FC/FB and FD/FE.
+
+
+    ; load rng state into screen addr
+    lda RNG_STATE_LO
+    sta SCREEN_ADDR
+    lda RNG_STATE_HI
+    sta SCREEN_ADDR+1
+    ; divide by 8 to convert from pixel offset to byte offset
+    lsr SCREEN_ADDR+1
+    ror SCREEN_ADDR
+    lsr SCREEN_ADDR+1
+    ror SCREEN_ADDR
+    lsr SCREEN_ADDR+1
+    ror SCREEN_ADDR
+    ; add baseline screen address 0x2000
+    lda #$20
+    adc SCREEN_ADDR+1
+    sta SCREEN_ADDR+1
+
+    lda RNG_STATE_LO
+    and #7
+    tax
+
+    ; load addr., mask pattern, store again
+    lda SCREEN_ADDR
+    sta $FB
+    lda SCREEN_ADDR+1
+    sta $FC
+
+    ldy #0
+    lda ($FB), Y
+    and SCREEN_MASK_AND_0, X
     sta ($FB), Y
 
     rts
