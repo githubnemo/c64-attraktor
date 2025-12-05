@@ -1780,7 +1780,7 @@ play:
 		jmp branch1109
 
 branch1:
-        ldy #$00			//voice1
+        ldy #$00			; voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
@@ -1833,7 +1833,7 @@ branch2:ldy sound1index
 		iny
 		sty sound1index
 branch1109:
-        dec duration3		//voice3
+        dec duration3		; voice3
 		beq fill_voice_3
 		lda duration3
 		cmp #hardrestartcounter
@@ -1864,8 +1864,8 @@ fill_voice_3:
 		sta voice3pointer+1
 		ldy #$00
 		lda (sound3pointer),y
-		sta SUSTAIN_REL_VOICE3		//sr
-		sty ATTACK_DUR_VOICE3		//ad
+		sta SUSTAIN_REL_VOICE3		; sr
+		sty ATTACK_DUR_VOICE3		; ad
 		iny
 		sty CONTROL_VOICE3          ; sync with voice 2
 		sty sound3index
@@ -1885,10 +1885,10 @@ branch115e:
 		tay
 		lda (sound3pointer),y
 branch1166:
-        sta $d416		//filter
+        sta $d416		; filter
 		iny
 		lda (sound3pointer),y
-		sta $d412		//wave
+		sta $d412	; wave
 		iny
 		lda (sound3pointer),y
 		iny
@@ -1901,7 +1901,7 @@ branch1166:
 		lda freqlo,y
 		sta $d40e
 sub_fill_voice_2:
-        dec duration2			//voice2
+        dec duration2		; voice2
 		beq fill_voice_2
 		lda duration2
 		cmp #hardrestartcounter
@@ -1932,10 +1932,10 @@ fill_voice_2:	ldy #$00
 		ldy #$00
 		sty vibratoindex
 		lda (sound2pointer),y
-		sta SUSTAIN_REL_VOICE2		//sr
-		sty ATTACK_DUR_VOICE2		//ad
+		sta SUSTAIN_REL_VOICE2		; sr
+		sty ATTACK_DUR_VOICE2		; ad
 		iny
-		sty CONTROL_VOICE2		//wave
+		sty CONTROL_VOICE2		; wave
 		lda (sound2pointer),y
 		sta pulsecontrol
 		iny
@@ -1960,15 +1960,15 @@ branch11e5:	iny
 		lda (sound2pointer),y
 
 
-branch11ed:	sta $d40b		//wave
+branch11ed:	sta $d40b		; wave
 		lda pulsecontrol
 		beq branch1200
 		iny
 		lda (sound2pointer),y
-		sta $d409		//pulselow
+		sta $d409		; pulselow
 		iny
 		lda (sound2pointer),y
-		sta $d40a		//pulsehigh
+		sta $d40a		; pulsehigh
 branch1200:	iny
 		lda (sound2pointer),y
 		iny
@@ -1998,7 +1998,7 @@ branch122a:	iny
 		sta vibratoindex
 		rts
 branch1230:
-        sta FREQ_LO_VOICE2		//obsolete ?
+        sta FREQ_LO_VOICE2		; obsolete ?
 		lda freqhi,x
 		sta FREQ_LO_VOICE2
 		rts
@@ -2035,14 +2035,14 @@ freqhi:
 !byte	$6a,$70,$77,$7e,$86,$8e,$96,$9f
 !byte	$a8,$b3,$bd,$c8,$d4,$e1,$ee,$fd
 
-//------------------------------------------------------------
-//sounddata
-//format voice1 (Drumtrack):
-//.byte SR Value
-//.byte Freqhi,wave
-//.byte Freqhi,wave - if freqhi=0 -> end of sound
+; ------------------------------------------------------------
+; sounddata
+; format voice1 (Drumtrack):
+; .byte SR Value
+; .byte Freqhi,wave
+; .byte Freqhi,wave - if freqhi=0 -> end of sound
 
-basedrum:					//basedrum
+basedrum:				    ; basedrum
 !byte $f7,$dd,$81,$0c,$11,$0a,$11,$08,$11,$06,$10,$03,$10,$00
 
 snare:
@@ -2052,19 +2052,19 @@ hihat:
 !byte $84,$fe,$81,$d0,$80,$a0,$80,$00
 
 
-//------------------------------------------------------------
-//format voice2 (vibratotrack):
-//first frame
-//.byte SR Value
-//.byte pulsecontrol    =$0 -> pulse off, other -> pulse on
-//.word vibratooffset
-//following frames
-//.byte wave		=$0 -> next byte is loopindex, =$FF -> end
-//.byte noteoffset
-//if pulse = on
-//.byte wave,pulselow,pulsehigh,noteoffset
+; ------------------------------------------------------------
+; format voice2 (vibratotrack):
+; first frame
+; .byte SR Value
+; .byte pulsecontrol    =$0 -> pulse off, other -> pulse on
+; .word vibratooffset
+; following frames
+; .byte wave		=$0 -> next byte is loopindex, =$FF -> end
+; .byte noteoffset
+; if pulse = on
+; .byte wave,pulselow,pulsehigh,noteoffset
 
-silence02:					//silence
+silence02:					; silence
 !byte $00,$00
 !word novibrato
 !byte $08,$00,$ff
@@ -2137,15 +2137,15 @@ chord2:
 
 
 
-//------------------------------------------------------------
-//format voice3 (filtertrack):
-//first frame
-//!byte SR Value
-//following frames
-//!byte Filterhigh,wave,noteoffset
-//note: if filterhigh=$00, next byte is loopindex. if filterhigh=$ff ->end
+; ------------------------------------------------------------
+; format voice3 (filtertrack):
+; first frame
+; !byte SR Value
+; following frames
+; !byte Filterhigh,wave,noteoffset
+; note: if filterhigh=$00, next byte is loopindex. if filterhigh=$ff ->end
 
-silence03:					//silence
+silence03:					; silence
 !byte $00
 !byte $fe,$08,$00
 !byte $ff
@@ -2166,26 +2166,26 @@ filterbass:
 
 
 
-//------------------------------------------------------------
-//vibratotable
-//.byte addvalue-high,addvalue-low	if highbyte=$80 -> next byte=loopindex
+; ------------------------------------------------------------
+; vibratotable
+; .byte addvalue-high,addvalue-low	if highbyte=$80 -> next byte=loopindex
 
-novibrato:			//empty
+novibrato:			; empty
 !byte $00,$00,$80,$00
 
 
 
-//------------------------------------------------------------
-//musicdata
+; ------------------------------------------------------------
+; musicdata
 
 voice1:
 voice1loop:
 
-//format .word soundoffset, .byte duration   if soundoffset=0000 then loop
+; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
 
 
-//simple rythm
-//-------------
+; simple rythm
+; -------------
 !word basedrum
 !byte $0c
 !word hihat
@@ -2199,8 +2199,8 @@ voice1loop:
 !word hihat
 !byte $06
 
-//simple rythm
-//-------------
+; simple rythm
+; -------------
 !word basedrum
 !byte $0c
 !word hihat
@@ -2214,8 +2214,8 @@ voice1loop:
 !word hihat
 !byte $06
 
-//simple rythm
-//-------------
+; simple rythm
+; -------------
 !word basedrum
 !byte $0c
 !word hihat
@@ -2229,8 +2229,8 @@ voice1loop:
 !word hihat
 !byte $06
 
-//simple rythm+doublesnare
-//-------------
+; simple rythm+doublesnare
+; -------------
 !word basedrum
 !byte $0c
 !word hihat
@@ -2248,12 +2248,12 @@ voice1loop:
 
 
 !word $0000
-//------------------------------------------------------------
+; ------------------------------------------------------------
 voice2:
 voice2loop_default:
 voice2loop_min:
 
-//format .word soundoffset, .byte duration,note
+; format .word soundoffset, .byte duration,note
 
 !word chord_min
 !byte $24,$34
@@ -2340,12 +2340,12 @@ voice2loop_maj:
 
 
 
-//------------------------------------------------------------
+; ------------------------------------------------------------
 voice3:
 voice3loop_default:
 voice3loop_left_1:
 
-//format .word soundoffset, .byte duration,note
+; format .word soundoffset, .byte duration,note
 
 !word filterbass
 !byte $12,$1c
