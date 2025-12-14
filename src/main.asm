@@ -1767,7 +1767,18 @@ play:
 ++
 
 
-
+        ; x = 0
+        ; duration1--
+        ; if (!duration) {
+        ;   goto branch1
+        ; }
+        ; if (duration1 >= hardrestartcounter) {
+        ;   goto branch2
+        ; }
+        ; *ATTACK_DUR_VOICE1 = x
+        ; *SUSTAIN_REL_VOICE1 = x
+        ; *CONTROL_VOICE1 = x
+        ; goto branch1109
         ldx #$00
 		dec duration1
 		beq branch1
@@ -1780,6 +1791,20 @@ play:
 		jmp branch1109
 
 branch1:
+        ; y = 0
+        ; <sound1pointer = *(voice1pointer + y++)
+        ; if (!*(voice1poiner + y)) 
+        ;    goto restartmusic
+        ; >sound1pointer = *(voice1pointer + y++)
+        ; *duration1 = *(voice1pointer + y++)
+        ; voice1pointer += 3
+        ; y = 0 
+        ; *SUSTAIN_REL_VOICE1 = *(sound1pointer + y++)
+        ; *ATTACK_DUR_VOICE1 = 1
+        ; *CONTROL_VOICE1 = 2
+        ; sound1index = 2
+        ; y = 2
+        ; goto branch1109
         ldy #$00			; voice1
 		lda (voice1pointer),y
 		sta sound1pointer
@@ -1807,6 +1832,15 @@ branch1:
 		jmp branch1109
 
 restartmusic:
+        ; for (x=2; x >= 0; x--) {
+        ;   *(voice1pointer+x) = *(voiceloop+x)
+        ;   *(voice1pointer+3+x) = *(voiceloop+3+x)
+        ;   *(duration1+x) = 1 // duration[x] = 1
+        ; }
+        ; *CONTROL_VOICE1 = 8
+        ; *CONTROL_VOICE2 = 8
+        ; *CONTROL_VOICE3 = 8
+        ; return
         ldx #$02
 loop3:
         lda voiceloop,x
@@ -1823,7 +1857,20 @@ loop3:
 		sta CONTROL_VOICE3  ; set all voices to 'test'?
 		rts
 
-branch2:ldy sound1index
+branch2:
+        ; // read sound1
+        ;
+        ; y = *sound1index
+        ; a = *(sound1pointer + y)
+        ; if (!a) {
+        ;   goto branch1109
+        ; }
+        ; *FREQ_HI_VOICE1 = a
+        ; y++
+        ; *CONTROL_VOICE1 = *(sound1pointer + y)
+        ; y++
+        ; *soundindex = y
+        ldy sound1index
 		lda (sound1pointer),y
 		beq branch1109
 		sta FREQ_HI_VOICE1
@@ -1833,6 +1880,18 @@ branch2:ldy sound1index
 		iny
 		sty sound1index
 branch1109:
+        ; duration3--
+        ; if (!duration3) {
+        ;    goto fill_voice_3
+        ; } else {
+        ;   if (duration3 >= hardrestartcounter)
+        ;       goto branch1151
+        ;   // hard reset?
+        ;   *ATTACK_DUR_VOICE1 = x
+        ;   *SUSTAIN_REL_VOICE1 = x
+        ;   *CONTROL_VOICE1 = x
+        ;   goto sub_fill_voice_2
+        ; }
         dec duration3		; voice3
 		beq fill_voice_3
 		lda duration3
@@ -1843,6 +1902,19 @@ branch1109:
 		stx CONTROL_VOICE1
 		jmp sub_fill_voice_2
 fill_voice_3:
+        ; y = 0
+        ; *sound3pointer = *(voice3pointer + y++)
+        ; *(sound3pointer+1) = *(voice3pointer + y++)
+        ; *duration3 = *(voice3pointer + y++)
+        ; *note3 = *(voice3pointer + y++)
+        ; voice3pointer += 4
+        ;
+        ; *SUSTAIN_REL_VOICE3 = *(sound3pointer)
+        ; *ATTACK_DUR_VOICE3 = 0
+        ; *CONTROL_VOICE3 = 1 // sync with voice 2 
+        ; sound3index = 1
+        ;
+        ; goto sub_fill_voice_2
         ldy #$00
 		lda (voice3pointer),y
 		sta sound3pointer
@@ -1872,6 +1944,12 @@ fill_voice_3:
 		jmp sub_fill_voice_2
 
 branch1151:
+        ; y = sound3index
+        ; a = *(sound3pointer + y)
+        ; if (!a)
+        ;   goto branch115e
+        ; if (a != 0xff) // stop byte
+        ;   goto branch1166
         ldy sound3index
 		lda (sound3pointer),y
 		beq branch115e
@@ -1879,12 +1957,26 @@ branch1151:
 		bne branch1166
 		jmp sub_fill_voice_2
 branch115e:
+        ; // increment sound3index
+        ;
+        ; y++
+        ; sound3index = *(sound3pointer + y)
+        ; y = a
+        ; a = *(sound3pointer + y)
         iny
 		lda (sound3pointer),y
 		sta sound3index
 		tay
 		lda (sound3pointer),y
 branch1166:
+        ; *filter = a 
+        ; *wave = *(sound3pointer + y++)
+        ; sound3index = ++y
+        ; // note table lookup? note3 is set from voice3pointer 
+        ; a = *(sound3pointer + y) + note3
+        ; y = a
+        ; *$d40f = *(freqhi + y)
+        ; *d40e = *(freqlo + y)
         sta $d416		; filter
 		iny
 		lda (sound3pointer),y
@@ -1901,6 +1993,13 @@ branch1166:
 		lda freqlo,y
 		sta $d40e
 sub_fill_voice_2:
+        ; duration2--
+        ; if (duration2 >= hardrestartcounter)
+        ;    goto branch11da
+        ; *ATTACK_DUR_VOICE1 = x
+        ; *SUSTAIN_REL_VOICE1 = x
+        ; *CONTROL_VOICE1 = x
+        ; return
         dec duration2		; voice2
 		beq fill_voice_2
 		lda duration2
@@ -1910,7 +2009,8 @@ sub_fill_voice_2:
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-fill_voice_2:	ldy #$00
+fill_voice_2:	
+                ldy #$00
 		lda (voice2pointer),y
 		sta sound2pointer
 		iny
