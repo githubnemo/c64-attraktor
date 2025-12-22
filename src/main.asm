@@ -1140,6 +1140,8 @@ clear_rng_pixel
 
 !addr FREQ_LO_VOICE2 = $d407
 !addr FREQ_HI_VOICE2 = $d408
+!addr PULSE_DUTY_LO_VOICE2 = $d409
+!addr PULSE_DUTY_HI_VOICE2 = $d40a
 !addr CONTROL_VOICE2 = $d40b
 !addr ATTACK_DUR_VOICE2 = $d40c
 !addr SUSTAIN_REL_VOICE2 = $d40d
@@ -1793,12 +1795,12 @@ play:
 branch1:
         ; y = 0
         ; <sound1pointer = *(voice1pointer + y++)
-        ; if (!*(voice1poiner + y)) 
+        ; if (!*(voice1poiner + y))
         ;    goto restartmusic
         ; >sound1pointer = *(voice1pointer + y++)
         ; *duration1 = *(voice1pointer + y++)
         ; voice1pointer += 3
-        ; y = 0 
+        ; y = 0
         ; *SUSTAIN_REL_VOICE1 = *(sound1pointer + y++)
         ; *ATTACK_DUR_VOICE1 = 1
         ; *CONTROL_VOICE1 = 2
@@ -1911,7 +1913,7 @@ fill_voice_3:
         ;
         ; *SUSTAIN_REL_VOICE3 = *(sound3pointer)
         ; *ATTACK_DUR_VOICE3 = 0
-        ; *CONTROL_VOICE3 = 1 // sync with voice 2 
+        ; *CONTROL_VOICE3 = 1 // sync with voice 2
         ; sound3index = 1
         ;
         ; goto sub_fill_voice_2
@@ -1969,10 +1971,10 @@ branch115e:
 		tay
 		lda (sound3pointer),y
 branch1166:
-        ; *filter = a 
+        ; *filter = a
         ; *wave = *(sound3pointer + y++)
         ; sound3index = ++y
-        ; // note table lookup? note3 is set from voice3pointer 
+        ; // note table lookup? note3 is set from voice3pointer
         ; a = *(sound3pointer + y) + note3
         ; y = a
         ; *$d40f = *(freqhi + y)
@@ -2009,8 +2011,26 @@ sub_fill_voice_2:
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-fill_voice_2:	
-                ldy #$00
+fill_voice_2:
+        ; y = 0
+        ; <sound2pointer = *(voice2pointer + y++)
+        ; >sound2pointer = *(voice2pointer + y++)
+        ; duration2 = *(voice2pointer + y++)
+        ; note2 = *(voice2pointer + y++)
+        ; voice2pointer += 4
+        ; y = 0
+        ; vibratoindex = y      // 0
+        ; SUSTRAIN_REL_VOICE2 = *(sound2pointer + y)
+        ; ATTACK_DUR_VOICE2 = 0
+        ; y++
+        ; CONTROL_VOICE2 = y    // 1
+        ; pulsecontrol = *(sound2pointer + y)
+        ; y++
+        ; <vibratopointer = *(sound2pointer + y++)
+        ; >vibratopointer = *(sound2pointer + y++)
+        ; sound2index = y
+        ; return
+        ldy #$00
 		lda (voice2pointer),y
 		sta sound2pointer
 		iny
@@ -2047,29 +2067,75 @@ fill_voice_2:
 		iny
 		sty sound2index
 		rts
-branch11da:	ldy sound2index
+branch11da:
+        ; y = sound2index
+        ; a = *(sound2pointer + y)
+        ; if (!a) {
+        ;    // silence? skip to next sound
+        ;    goto branch11e5
+        ; }
+        ; if (a != 0xff) {
+        ;    goto branch11ed
+        ; }
+        ; return
+        ldy sound2index
 		lda (sound2pointer),y
 		beq branch11e5
 		cmp #$ff
 		bne branch11ed
 		rts
-branch11e5:	iny
+branch11e5:
+        ; y++
+        ; sound2index = *(sound2pointer + y)
+        ; y = a
+        ; a = *(sound2pointer + y)
+        iny
 		lda(sound2pointer),y
 		sta sound2index
 		tay
 		lda (sound2pointer),y
-
-
-branch11ed:	sta $d40b		; wave
+branch11ed:
+        ; CONTROL_VOICE2 = a
+        ; if (!pulsecontrol) {
+        ;    goto branch1200
+        ; }
+        ; y++
+        ; PULSE_DUTY_LO_VOICE2 = *(sound2pointer + y++)
+        ; PULSE_DUTY_HI_VOICE2 = *(sound2pointer + y++)
+        sta CONTROL_VOICE2 ; wave
 		lda pulsecontrol
 		beq branch1200
 		iny
 		lda (sound2pointer),y
-		sta $d409		; pulselow
+		sta PULSE_DUTY_LO_VOICE2
 		iny
 		lda (sound2pointer),y
-		sta $d40a		; pulsehigh
-branch1200:	iny
+		sta PULSE_DUTY_HI_VOICE2
+branch1200:
+        ; y++
+        ; a = *(sound2pointer + y)
+        ; y++
+        ; sound2index = y
+        ; a += note2
+        ; x = a
+        ; a = freqlo[x]    // note -> freq lookup
+        ; y = vibratoindex
+        ; y++
+        ; a += *(vibratopointer+y)
+        ; FREQ_LO_VOICE2 = a
+        ; y--
+        ; a = freqhi[x]
+        ; a += *(vibratopointer+y)
+        ; FREQ_HI_VOICE2 = a
+        ; y++
+        ; y++
+        ; a = *(vibratopointer+y)
+        ; if (a == 0x80) { // -1
+        ;   goto branch122a
+        ; }
+        ; y = vibratoindex
+        ; return
+        iny
 		lda (sound2pointer),y
 		iny
 		sty sound2index
@@ -2093,16 +2159,14 @@ branch1200:	iny
 		beq branch122a
 		sty vibratoindex
 		rts
-branch122a:	iny
+branch122a:
+        ; y++
+        ; vibratoindex = *(vibratopointer + y)
+        ; return
+        iny
 		lda (vibratopointer),y
 		sta vibratoindex
 		rts
-branch1230:
-        sta FREQ_LO_VOICE2		; obsolete ?
-		lda freqhi,x
-		sta FREQ_LO_VOICE2
-		rts
-
 
 
 
