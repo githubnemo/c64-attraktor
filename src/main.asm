@@ -119,13 +119,83 @@ clearscr_loop
 ;
 
 ; ZERO PAGE LAYOUT
+
+; sound output uses $30-$47
+!set i =$30
+!set voice1pointer=i
+!set i = i + 2
+!set voice2pointer=i
+!set i = i + 2
+!set voice3pointer=i
+!set i = i + 2
+!set sound1pointer=i
+!set i = i + 2
+!set sound2pointer=i
+!set i = i + 2
+!set sound3pointer=i
+!set i = i + 2
+!set duration1=i
+!set i = i + 1
+!set duration2=i
+!set i = i + 1
+!set duration3=i
+!set i = i + 1
+!set sound1index=i
+!set i = i + 1
+!set note3=i
+!set i = i + 1
+!set sound2index=i
+!set i = i + 1
+!set note2=i
+!set i = i + 1
+!set sound3index=i
+!set i = i + 1
+!set pulsecontrol=i
+!set i = i + 1
+!set vibratopointer=i
+!set i = i + 2
+!set vibratoindex=i
+
 !addr KEY_PRESS_TIMER = $87
 !addr SND_PATTERN_SWITCHED = $88
 !addr TURN_SOUND_ON = $89
 !addr RNG_STATE_LO = $90
 !addr RNG_STATE_HI = $91
 
+
 ; MEMORY LAYOUT
+
+; Sound output
+!addr SID_MEMORY_START = $d400
+
+!addr FREQ_LO_VOICE1 = $d400
+!addr FREQ_HI_VOICE1 = $d401
+!addr CONTROL_VOICE1 = $d404
+!addr ATTACK_DUR_VOICE1 = $d405
+!addr SUSTAIN_REL_VOICE1 = $d406
+!addr WAV_DUTY_LO_VOICE1 = $d402
+!addr WAV_DUTY_HI_VOICE1 = $d403
+
+!addr FREQ_LO_VOICE2 = $d407
+!addr FREQ_HI_VOICE2 = $d408
+!addr PULSE_DUTY_LO_VOICE2 = $d409
+!addr PULSE_DUTY_HI_VOICE2 = $d40a
+!addr CONTROL_VOICE2 = $d40b
+!addr ATTACK_DUR_VOICE2 = $d40c
+!addr SUSTAIN_REL_VOICE2 = $d40d
+
+!addr FREQ_LO_VOICE3 = $d40e
+!addr FREQ_HI_VOICE3 = $d40f
+!addr CONTROL_VOICE3 = $d412
+!addr ATTACK_DUR_VOICE3 = $d413
+!addr SUSTAIN_REL_VOICE3 = $d414
+
+!addr FILTER_CUTOFF_HI = $d416
+!addr FILTER_CUTOFF_LO = $d415
+
+!addr SID_MAIN_CONTROL = $d418
+
+; Attractor computation + drawing
 !addr FP_A  = $C400
 !addr FP_B  = $C430
 !addr FP_C  = $C460
@@ -1127,36 +1197,6 @@ clear_rng_pixel
 
 
 
-
-!addr SID_MEMORY_START = $d400
-
-!addr FREQ_LO_VOICE1 = $d400
-!addr FREQ_HI_VOICE1 = $d401
-!addr CONTROL_VOICE1 = $d404
-!addr ATTACK_DUR_VOICE1 = $d405
-!addr SUSTAIN_REL_VOICE1 = $d406
-!addr WAV_DUTY_LO_VOICE1 = $d402
-!addr WAV_DUTY_HI_VOICE1 = $d403
-
-!addr FREQ_LO_VOICE2 = $d407
-!addr FREQ_HI_VOICE2 = $d408
-!addr PULSE_DUTY_LO_VOICE2 = $d409
-!addr PULSE_DUTY_HI_VOICE2 = $d40a
-!addr CONTROL_VOICE2 = $d40b
-!addr ATTACK_DUR_VOICE2 = $d40c
-!addr SUSTAIN_REL_VOICE2 = $d40d
-
-!addr FREQ_LO_VOICE3 = $d40e
-!addr FREQ_HI_VOICE3 = $d40f
-!addr CONTROL_VOICE3 = $d412
-!addr ATTACK_DUR_VOICE3 = $d413
-!addr SUSTAIN_REL_VOICE3 = $d414
-
-!addr FILTER_CUTOFF_HI = $d416
-!addr FILTER_CUTOFF_LO = $d415
-
-!addr SID_MAIN_CONTROL = $d418
-
 voiceinit
     !word voice1
     !word voice2loop_default ;voice2
@@ -1612,44 +1652,7 @@ hardrestartindex:		;value to put into wave in hardrestartframes (from right to l
 !byte 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 
-;zeropage-variables
-;uses $30-$47 by default - if you have to split, insert new calculation inbetween (i=$xx)
 
-
-!set i =$30
-!set voice1pointer=i
-!set i = i + 2
-!set voice2pointer=i
-!set i = i + 2
-!set voice3pointer=i
-!set i = i + 2
-!set sound1pointer=i
-!set i = i + 2
-!set sound2pointer=i
-!set i = i + 2
-!set sound3pointer=i
-!set i = i + 2
-!set duration1=i
-!set i = i + 1
-!set duration2=i
-!set i = i + 1
-!set duration3=i
-!set i = i + 1
-!set sound1index=i
-!set i = i + 1
-!set note3=i
-!set i = i + 1
-!set sound2index=i
-!set i = i + 1
-!set note2=i
-!set i = i + 1
-!set sound3index=i
-!set i = i + 1
-!set pulsecontrol=i
-!set i = i + 1
-!set vibratopointer=i
-!set i = i + 2
-!set vibratoindex=i
 
 
 
@@ -1768,10 +1771,9 @@ play:
         sta SND_PATTERN_SWITCHED
 ++
 
-
         ; x = 0
         ; duration1--
-        ; if (!duration) {
+        ; if (!duration1) {
         ;   goto branch1
         ; }
         ; if (duration1 >= hardrestartcounter) {
