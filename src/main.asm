@@ -10,6 +10,21 @@ sysline:
 	sta $d020
 }
 
+!macro bzs .label {
+    ; branch if zero flag set
+    beq .label
+}
+
+!macro bzc .label {
+    ; branch if zero flag clear
+    bne .label
+}
+
+!macro dbgblt .addr, .val {
+    lda #.val
+    sta .addr + $2000
+}
+
 
 start
     +SetBorderColor 0
@@ -157,10 +172,11 @@ clearscr_loop
 !set vibratoindex=i
 
 !addr KEY_PRESS_TIMER = $87
-!addr SND_PATTERN_SWITCHED = $88
-!addr TURN_SOUND_ON = $89
+!addr SND_LAST_WAS_RIGHT = $88
+!addr SND_TURN_SOUND_ON = $89
 !addr RNG_STATE_LO = $90
 !addr RNG_STATE_HI = $91
+!addr SND_TURNED_OFF = $92
 
 
 ; MEMORY LAYOUT
@@ -1404,7 +1420,7 @@ handle_key_presses
 
     ; default is to turn sound off after reading the keys.
     lda #0
-    sta TURN_SOUND_ON
+    sta SND_TURN_SOUND_ON
 
     ; 'Q' key press handler
     ;
@@ -1420,7 +1436,7 @@ handle_key_presses
 
     ; TODO handle q
     lda #1
-    sta TURN_SOUND_ON
+    sta SND_TURN_SOUND_ON
 
 .q_not_pressed
 
@@ -1438,7 +1454,7 @@ handle_key_presses
 
     ; TODO handle a
     lda #1
-    sta TURN_SOUND_ON
+    sta SND_TURN_SOUND_ON
 
 .a_not_pressed
 
@@ -1455,20 +1471,42 @@ handle_key_presses
 
     ; TODO handle z
     lda #1
-    sta TURN_SOUND_ON
+    sta SND_TURN_SOUND_ON
 
 .z_not_pressed
 
 
     ; we now know if we need to toggle sound on or not.
     ; let's do that now!
-    lda TURN_SOUND_ON
-    beq +
+    ;
+    ; if SND_TURN_SOUND_ON and SND_TURNED_OFF:
+    ;   turn_sound_on()
+    ;   SND_TURNED_OFF = False
+    ;
+    ; if not SND_TURN_SOUND_ON and not SND_TURNED_OFF:
+    ;   turn_sound_off()
+    ;   SND_TURNED_OFF = True
+    +dbgblt $200, $0
+    lda SND_TURN_SOUND_ON
+    +bzs +
+    lda SND_TURNED_OFF
+    +bzs ++ ; SND_TURNED_OFF must be 1, therefore we bail if zero is set
+    +dbgblt $200, $ff
     +turn_sound_on
+    lda #0
+    sta SND_TURNED_OFF
     jmp ++
 +
+    ; SND_TURN_SOUND_ON == 0, we just need to check if
+    ; SND_TURNED_OFF is already set
+    lda SND_TURNED_OFF
+    +bzc ++ ; SND_TURNED_OFF must be 0, therefore we bail if zero is clear
+    +dbgblt $200, 1
     +turn_sound_off
+    lda #1
+    sta SND_TURNED_OFF
 ++
+
 
 
     ; 'R' key press handler
