@@ -21,6 +21,8 @@ sysline:
 }
 
 !macro dbgblt .addr, .val {
+    ; usage:
+    ; +dbgblt $200, $ff   draws a straight line in the first row
     lda #.val
     sta .addr + $2000
 }
@@ -33,9 +35,11 @@ start
     lda#$02
     sta$0400        ; draw 'B'
 
+    sei                ; disable interrupts
+
     ; setup sound
     jsr init_sid
-    sei                ; disable interrupts
+
     lda #<vic_rst_irq
     sta $0314          ;
     lda #>vic_rst_irq  ;
@@ -250,6 +254,18 @@ clearscr_loop
 !addr SCREEN_MASK_OR_7 = $C647
 
 
+!addr voice1loop_current = $C650
+!addr voice2loop_current = $C652
+!addr voice3loop_current = $C654
+
+!addr voice1_switch_left_request = $C655
+!addr voice2_switch_left_request = $C656
+!addr voice3_switch_left_request = $C657
+!addr voice1_switch_right_request = $C658
+!addr voice2_switch_right_request = $C659
+!addr voice3_switch_right_request = $C65A
+
+
 lda#0b00000001
 sta SCREEN_MASK_OR_0
 lda#0b00000010
@@ -300,9 +316,17 @@ jsr rng_seed
 
 
 lda #0
-sta SND_PATTERN_SWITCHED
+sta SND_LAST_WAS_RIGHT
 sta KEY_PRESS_TIMER
-sta TURN_SOUND_ON
+sta SND_TURN_SOUND_ON
+sta SND_TURNED_OFF
+
+sta voice1_switch_left_request
+sta voice2_switch_left_request
+sta voice3_switch_left_request
+sta voice1_switch_right_request
+sta voice2_switch_right_request
+sta voice3_switch_right_request
 
 
 !macro lshift_16bit .hb, .lb {
@@ -1226,13 +1250,13 @@ clear_rng_pixel
 
 
 voiceinit
-    !word voice1
+    !word voice1loop_default
     !word voice2loop_default ;voice2
     !word voice3loop_default ;voice3
 
 
 voiceloop
-    !word voice1loop
+    !word voice1loop_default
     !word voice2loop_default
     !word voice3loop_default
 
@@ -1273,13 +1297,6 @@ off_duration
 vibrato_state
     !byte $00
 
-; zero page variables for pointers to sounds
-!addr voice1_ptr = $30
-!addr voice2_ptr = $32
-!addr voice3_ptr = $34
-
-!addr sound_ptr = $36
-!addr sound_idx = $38
 
 ; global filter and main volume config for
 ; register $d416, $d417 and $d418
@@ -1839,7 +1856,7 @@ play_new:
         ;jsr switch_to_right
         lda #1
         ;sta voice1_switch_right_request
-        ;sta voice2_switch_right_request
+        sta voice2_switch_right_request
 
         lda #1
         sta SND_LAST_WAS_RIGHT
@@ -1851,10 +1868,9 @@ play_new:
         beq ++
         ; here: SND_LAST_WAS_RIGHT != 0
 
-        ;jsr switch_to_left
         lda #1
         ;sta voice1_switch_left_request
-        ;sta voice2_switch_left_request
+        sta voice2_switch_left_request
 
         lda #0
         sta SND_LAST_WAS_RIGHT
@@ -2606,26 +2622,6 @@ voice2loop_min:
 !word silence02
 !byte $0c,$00
 
-; !word chord_min
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
-
-; !word chord_min
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
-
-; !word chord_maj
-; !byte $24,$32
-; !word silence02
-; !byte $0c,$00
-
-; !word chord_min
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
-
 
 voice2loop_maj:
 
@@ -2649,26 +2645,28 @@ voice2loop_maj:
 !word silence02
 !byte $0c,$00
 
-; !word chord_maj
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
 
-; !word chord_maj
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
+voice2loop_silent:
 
-; !word chord_maj
-; !byte $24,$2f
-; !word silence02
-; !byte $0c,$00
+!word silence02
+!byte $0c,$00
+!word silence02
+!byte $0c,$00
 
-; !word chord_maj
-; !byte $24,$34
-; !word silence02
-; !byte $0c,$00
+!word silence02
+!byte $0c,$00
+!word silence02
+!byte $0c,$00
 
+!word silence02
+!byte $0c,$00
+!word silence02
+!byte $0c,$00
+
+!word silence02
+!byte $0c,$00
+!word silence02
+!byte $0c,$00
 
 
 ; ------------------------------------------------------------
@@ -2702,29 +2700,35 @@ voice3loop_left_1:
 !word silence03
 !byte $1e,$00
 
-; !word filterbass
-; !byte $12,$1c
-; !word filterbass
-; !byte $12,$1c
-; !word filterbass
-; !byte $0c,$15
 
-; !word filterbass
-; !byte $12,$18
-; !word silence03
-; !byte $1e,$00
 
-; !word filterbass
-; !byte $12,$1a
-; !word filterbass
-; !byte $12,$1a
-; !word filterbass
-; !byte $0c,$17
+voice3loop_silent:
 
-; !word filterbass
-; !byte $12,$1c
-; !word silence03
-; !byte $1e,$00
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+
+
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+
+!word silence03
+!byte $1e,$00
+!word silence03
+!byte $1e,$00
+
 
 
 voice3loop_maj:
@@ -2752,31 +2756,6 @@ voice3loop_right_1:
 !byte $12,$1c
 !word silence03
 !byte $1e,$00
-
-; !word filterbass
-; !byte $12,$1c
-; !word filterbass
-; !byte $12,$1c
-; !word filterbass
-; !byte $0c,$15
-
-; !word filterbass
-; !byte $12,$19
-; !word silence03
-; !byte $1e,$00
-
-; !word filterbass
-; !byte $12,$1b
-; !word filterbass
-; !byte $12,$1b
-; !word filterbass
-; !byte $0c,$17
-
-; !word filterbass
-; !byte $12,$1c
-; !word silence03
-; !byte $1e,$00
-
 
 
 
