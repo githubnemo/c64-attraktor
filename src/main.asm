@@ -235,6 +235,10 @@ clearscr_loop
 
 !addr SCREEN_ADDR = $C630
 
+; X offset where the attractor is visually split in two halves;
+; used for implementing the left and right sound switching
+!set X_SEPARATOR = 164
+
 ; LUT for ORing patterns
 !addr SCREEN_MASK_OR_0 = $C640
 !addr SCREEN_MASK_OR_1 = $C641
@@ -530,6 +534,10 @@ sta USE_FAST_MULT
 ; Comment the following jump to reach the fast mult test drawing code.
 jmp main
 
+
+
+; ================== TEST CODE ====================
+
 ; testing fast float multiplication
 ;
 ; FP_A = 3.1415
@@ -667,7 +675,11 @@ sta USE_FAST_MULT
 +drawloop
 
 jmp hang
+
+
+; ==================================
 ; End of fast mult test drawing code
+; ==================================
 
 
 
@@ -1317,13 +1329,14 @@ init_sid
     sta ATTACK_DUR_VOICE1,y
 
     lda #$01
-    sta play_durations,x    ; reset play durations as well in case of program
+    ;sta play_durations,x    ; reset play durations as well in case of program
                             ; restarts without rebooting the machine
+    sta duration1,x
 
     lda voiceinit,x
-    sta voice1_ptr,x
+    sta voice1pointer,x
     lda voiceinit+3,x
-    sta voice1_ptr+3,x
+    sta voice1pointer+3,x
 
     lda init_values_sid,x
     sta FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
@@ -1732,8 +1745,6 @@ waveinit:
 ;      5: band pass
 ;      4: low pass
 ;   3..0: main volume
-sidvalues:
-!byte $00,$f4,$1f
 
 !addr FREQ_LO_VOICE1 = $d400
 !addr FREQ_HI_VOICE1 = $d401
@@ -1754,59 +1765,99 @@ sidvalues:
 !addr SUSTAIN_REL_VOICE3 = $d414
 
 
-!set VOICE2_PTR_OFFSET = voice2loop_maj - voice2loop_default
-!set VOICE3_PTR_OFFSET = voice3loop_maj - voice3loop_default
+play: jmp play_new
 
-play:
 
+
+!zone my_play {
+
+voice2_switch_right:
+    lda <voice2loop_maj
+    sta <voice2pointer
+    sta voiceloop+2
+    sta <sound2pointer
+    lda >voice2loop_maj
+    sta >voice2pointer
+    sta voiceloop+3
+    sta >sound2pointer
+    lda #0
+    sta sound2index
+    rts
+
+voice2_switch_left:
+    lda <voice2loop_min
+    sta <voice2pointer
+    sta voiceloop+2
+    sta <sound2pointer
+    lda >voice2loop_min
+    sta >voice2pointer
+    sta voiceloop+3
+    sta >sound2pointer
+    lda #0
+    sta sound2index
+    rts
+
+voice1_switch_left:
+    lda <voice1loop_silent
+    sta <voice1pointer
+    sta voiceloop
+    sta <sound1pointer
+    lda >voice1loop_silent
+    sta >voice1pointer
+    sta voiceloop+1
+    sta >sound1pointer
+    lda #0
+    sta sound1index
+    rts
+
+
+voice1_switch_right:
+    lda <voice1loop_default
+    sta <voice1pointer
+    sta voiceloop+0
+    sta <sound1pointer
+    lda >voice1loop_default
+    sta >voice1pointer
+    sta voiceloop+1
+    sta >sound1pointer
+    lda #0
+    sta sound1index
+    rts
+
+
+play_new:
+        ; Look at the current X value and, if it is >=80 switch
         lda INT_X
-        cmp #$80
+        cmp #X_SEPARATOR
         bcc +
-        ; X >= #$80
-        lda SND_PATTERN_SWITCHED
-        bne ++ ; jump if SND_PATTERN_SWITCHED != 0
-        ; SND_PATTERN_SWITCHED == 0
-        +SetBorderColor 2
-        clc
-        lda #VOICE2_PTR_OFFSET
-        adc voice2pointer
-        sta voice2pointer
-        lda #0
-        adc voice2pointer+1
-        sta voice2pointer+1
-        clc
-        lda #VOICE3_PTR_OFFSET
-        adc voice3pointer
-        sta voice3pointer
-        lda #0
-        adc voice3pointer+1
-        sta voice3pointer+1
+        ; X >= #X_SEPARATOR
+        lda SND_LAST_WAS_RIGHT
+        bne ++ ; jump if SND_LAST_WAS_RIGHT != 0
+        ; here: SND_LAST_WAS_RIGHT == 0
+        +SetBorderColor 3
+
+        ;jsr switch_to_right
         lda #1
-        sta SND_PATTERN_SWITCHED
+        ;sta voice1_switch_right_request
+        ;sta voice2_switch_right_request
+
+        lda #1
+        sta SND_LAST_WAS_RIGHT
         jmp ++
 +
-        ; X < #$80
-        +SetBorderColor 1
-        lda SND_PATTERN_SWITCHED
+        ; X < #X_SEPARATOR
+        +SetBorderColor 4
+        lda SND_LAST_WAS_RIGHT
         beq ++
-        ; voice2pointer -= VOICE2_PTR_OFFSET
-        sec
-        lda voice2pointer
-        sbc #VOICE2_PTR_OFFSET
-        sta voice2pointer
-        lda voice2pointer+1
-        sbc #0
-        sta voice2pointer+1
-        ; voice3pointer -= VOICE3_PTR_OFFSET
-        sec
-        lda voice3pointer
-        sbc #VOICE3_PTR_OFFSET
-        sta voice3pointer
-        lda voice3pointer+1
-        sbc #0
-        sta voice3pointer+1
+        ; here: SND_LAST_WAS_RIGHT != 0
+
+        ;jsr switch_to_left
+        lda #1
+        ;sta voice1_switch_left_request
+        ;sta voice2_switch_left_request
+
         lda #0
-        sta SND_PATTERN_SWITCHED
+        sta SND_LAST_WAS_RIGHT
 ++
 
         ; x = 0
@@ -1823,36 +1874,37 @@ play:
         ; goto branch1109
         ldx #$00
 		dec duration1
-		beq branch1
+		beq .branch1
 		lda duration1
 		cmp #hardrestartcounter
-		bcs branch2
+		bcs .branch2
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
-		jmp branch1109
+		jmp .branch1109
 
-branch1:
+.branch1:
         ; y = 0
         ; <sound1pointer = *(voice1pointer + y++)
         ; if (!*(voice1poiner + y))
         ;    goto restartmusic
         ; >sound1pointer = *(voice1pointer + y++)
-        ; *duration1 = *(voice1pointer + y++)
+        ; duration1 = *(voice1pointer + y++)
         ; voice1pointer += 3
         ; y = 0
-        ; *SUSTAIN_REL_VOICE1 = *(sound1pointer + y++)
-        ; *ATTACK_DUR_VOICE1 = 1
-        ; *CONTROL_VOICE1 = 2
+        ; SUSTAIN_REL_VOICE1 = *(sound1pointer + y++)
+        ; ATTACK_DUR_VOICE1 = 1
+        ; CONTROL_VOICE1 = 2
         ; sound1index = 2
         ; y = 2
         ; goto branch1109
-        ldy #$00			; voice1
+        ;
+        ldy #$00			//voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
 		lda (voice1pointer),y
-		beq restartmusic
+		beq .restartmusic
 		sta sound1pointer+1
 		iny
 		lda (voice1pointer),y
@@ -1871,9 +1923,9 @@ branch1:
 		iny
 		sty CONTROL_VOICE1
 		sty sound1index
-		jmp branch1109
+		jmp .branch1109
 
-restartmusic:
+.restartmusic:
         ; for (x=2; x >= 0; x--) {
         ;   *(voice1pointer+x) = *(voiceloop+x)
         ;   *(voice1pointer+3+x) = *(voiceloop+3+x)
@@ -1884,7 +1936,7 @@ restartmusic:
         ; *CONTROL_VOICE3 = 8
         ; return
         ldx #$02
-loop3:
+.loop3:
         lda voiceloop,x
 		sta voice1pointer,x
 		lda voiceloop+3,x
@@ -1892,14 +1944,14 @@ loop3:
 		lda #$01
 		sta duration1,x
 		dex
-		bpl loop3
+		bpl .loop3
 		lda #$08
 		sta CONTROL_VOICE1
 		sta CONTROL_VOICE2
 		sta CONTROL_VOICE3  ; set all voices to 'test'?
 		rts
 
-branch2:
+.branch2:
         ; // read sound1
         ;
         ; y = *sound1index
@@ -1914,14 +1966,14 @@ branch2:
         ; *soundindex = y
         ldy sound1index
 		lda (sound1pointer),y
-		beq branch1109
+		beq .branch1109
 		sta FREQ_HI_VOICE1
 		iny
 		lda (sound1pointer),y
 		sta CONTROL_VOICE1
 		iny
 		sty sound1index
-branch1109:
+.branch1109:
         ; duration3--
         ; if (!duration3) {
         ;    goto fill_voice_3
@@ -1934,16 +1986,16 @@ branch1109:
         ;   *CONTROL_VOICE1 = x
         ;   goto sub_fill_voice_2
         ; }
-        dec duration3		; voice3
-		beq fill_voice_3
+        dec duration3		//voice3
+		beq .fill_voice_3
 		lda duration3
 		cmp #hardrestartcounter
-		bcs branch1151
+		bcs .branch1151
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
-		jmp sub_fill_voice_2
-fill_voice_3:
+		jmp .sub_fill_voice_2
+.fill_voice_3:
         ; y = 0
         ; *sound3pointer = *(voice3pointer + y++)
         ; *(sound3pointer+1) = *(voice3pointer + y++)
@@ -1978,14 +2030,14 @@ fill_voice_3:
 		sta voice3pointer+1
 		ldy #$00
 		lda (sound3pointer),y
-		sta SUSTAIN_REL_VOICE3		; sr
-		sty ATTACK_DUR_VOICE3		; ad
+		sta SUSTAIN_REL_VOICE3		//sr
+		sty ATTACK_DUR_VOICE3		//ad
 		iny
-		sty CONTROL_VOICE3          ; sync with voice 2
+		sty CONTROL_VOICE3          ; sync with voice 1 (2 actually?)
 		sty sound3index
-		jmp sub_fill_voice_2
+		jmp .sub_fill_voice_2
 
-branch1151:
+.branch1151:
         ; y = sound3index
         ; a = *(sound3pointer + y)
         ; if (!a)
@@ -1994,11 +2046,11 @@ branch1151:
         ;   goto branch1166
         ldy sound3index
 		lda (sound3pointer),y
-		beq branch115e
+		beq .branch115e
 		cmp #$ff
-		bne branch1166
-		jmp sub_fill_voice_2
-branch115e:
+		bne .branch1166
+		jmp .sub_fill_voice_2
+.branch115e:
         ; // increment sound3index
         ;
         ; y++
@@ -2010,7 +2062,7 @@ branch115e:
 		sta sound3index
 		tay
 		lda (sound3pointer),y
-branch1166:
+.branch1166:
         ; *filter = a
         ; *wave = *(sound3pointer + y++)
         ; sound3index = ++y
@@ -2022,7 +2074,7 @@ branch1166:
         sta $d416		; filter
 		iny
 		lda (sound3pointer),y
-		sta $d412	; wave
+		sta $d412		; wave
 		iny
 		lda (sound3pointer),y
 		iny
@@ -2034,24 +2086,26 @@ branch1166:
 		sta $d40f
 		lda freqlo,y
 		sta $d40e
-sub_fill_voice_2:
+.sub_fill_voice_2:
         ; duration2--
+        ; if (!duration2)
+        ;    goto fill_voice_2
         ; if (duration2 >= hardrestartcounter)
         ;    goto branch11da
         ; *ATTACK_DUR_VOICE1 = x
         ; *SUSTAIN_REL_VOICE1 = x
         ; *CONTROL_VOICE1 = x
         ; return
-        dec duration2		; voice2
-		beq fill_voice_2
+        dec duration2			; voice2
+		beq .fill_voice_2
 		lda duration2
 		cmp #hardrestartcounter
-		bcs branch11da
+		bcs .branch11da
 		stx ATTACK_DUR_VOICE1
 		stx SUSTAIN_REL_VOICE1
 		stx CONTROL_VOICE1
 		rts
-fill_voice_2:
+.fill_voice_2:
         ; y = 0
         ; <sound2pointer = *(voice2pointer + y++)
         ; >sound2pointer = *(voice2pointer + y++)
@@ -2092,10 +2146,10 @@ fill_voice_2:
 		ldy #$00
 		sty vibratoindex
 		lda (sound2pointer),y
-		sta SUSTAIN_REL_VOICE2		; sr
-		sty ATTACK_DUR_VOICE2		; ad
+		sta SUSTAIN_REL_VOICE2		//sr
+		sty ATTACK_DUR_VOICE2		//ad
 		iny
-		sty CONTROL_VOICE2		; wave
+		sty CONTROL_VOICE2		//wave
 		lda (sound2pointer),y
 		sta pulsecontrol
 		iny
@@ -2107,7 +2161,7 @@ fill_voice_2:
 		iny
 		sty sound2index
 		rts
-branch11da:
+.branch11da:
         ; y = sound2index
         ; a = *(sound2pointer + y)
         ; if (!a) {
@@ -2120,11 +2174,11 @@ branch11da:
         ; return
         ldy sound2index
 		lda (sound2pointer),y
-		beq branch11e5
+		beq .branch11e5
 		cmp #$ff
-		bne branch11ed
+		bne .branch11ed
 		rts
-branch11e5:
+.branch11e5:
         ; y++
         ; sound2index = *(sound2pointer + y)
         ; y = a
@@ -2134,7 +2188,7 @@ branch11e5:
 		sta sound2index
 		tay
 		lda (sound2pointer),y
-branch11ed:
+.branch11ed:
         ; CONTROL_VOICE2 = a
         ; if (!pulsecontrol) {
         ;    goto branch1200
@@ -2142,16 +2196,16 @@ branch11ed:
         ; y++
         ; PULSE_DUTY_LO_VOICE2 = *(sound2pointer + y++)
         ; PULSE_DUTY_HI_VOICE2 = *(sound2pointer + y++)
-        sta CONTROL_VOICE2 ; wave
+        sta $d40b		; wave
 		lda pulsecontrol
-		beq branch1200
+		beq .branch1200
 		iny
 		lda (sound2pointer),y
-		sta PULSE_DUTY_LO_VOICE2
+		sta $d409		; pulselow
 		iny
 		lda (sound2pointer),y
-		sta PULSE_DUTY_HI_VOICE2
-branch1200:
+		sta $d40a		; pulsehigh
+.branch1200:
         ; y++
         ; a = *(sound2pointer + y)
         ; y++
@@ -2196,10 +2250,10 @@ branch1200:
 		iny
 		lda (vibratopointer),y
 		cmp #$80
-		beq branch122a
+		beq .branch122a
 		sty vibratoindex
 		rts
-branch122a:
+.branch122a:
         ; y++
         ; vibratoindex = *(vibratopointer + y)
         ; return
@@ -2207,6 +2261,13 @@ branch122a:
 		lda (vibratopointer),y
 		sta vibratoindex
 		rts
+.branch1230:
+        sta FREQ_LO_VOICE2		//obsolete ?
+		lda freqhi,x
+		sta FREQ_LO_VOICE2
+		rts
+
+}
 
 
 
@@ -2245,6 +2306,9 @@ freqhi:
 ; .byte SR Value
 ; .byte Freqhi,wave
 ; .byte Freqhi,wave - if freqhi=0 -> end of sound
+
+silence01:
+!byte $00, $00, $08, $00
 
 basedrum:				    ; basedrum
 !byte $f7,$dd,$81,$0c,$11,$0a,$11,$08,$11,$06,$10,$03,$10,$00
@@ -2382,8 +2446,8 @@ novibrato:			; empty
 ; ------------------------------------------------------------
 ; musicdata
 
-voice1:
 voice1loop:
+voice1loop_default:
 
 ; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
 
@@ -2452,6 +2516,69 @@ voice1loop:
 
 
 !word $0000
+
+
+; voice1 silent track
+voice1loop_silent:
+
+; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+
+!word silence01
+!byte $0c
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+!word silence01
+!byte $06
+
+!word $0000
+
+
 ; ------------------------------------------------------------
 voice2:
 voice2loop_default:
