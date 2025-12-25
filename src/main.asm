@@ -319,7 +319,8 @@ lda #0
 sta SND_LAST_WAS_RIGHT
 sta KEY_PRESS_TIMER
 sta SND_TURN_SOUND_ON
-sta SND_TURNED_OFF
+
+
 
 sta voice1_switch_left_request
 sta voice2_switch_left_request
@@ -1324,6 +1325,9 @@ init_values_sid
 ;
 !zone init_sid {
 init_sid
+    lda #1
+    sta SND_TURNED_OFF
+
     ldy #$18
     lda #$00
 .loop1
@@ -1832,7 +1836,7 @@ play_new:
         bcc +
         ; X >= #X_SEPARATOR
         lda SND_LAST_WAS_RIGHT
-        bne ++ ; jump if SND_LAST_WAS_RIGHT != 0
+        +bzc ++ ; jump if SND_LAST_WAS_RIGHT != 0
         ; here: SND_LAST_WAS_RIGHT == 0
         +SetBorderColor 3
 
@@ -1848,7 +1852,7 @@ play_new:
         ; X < #X_SEPARATOR
         +SetBorderColor 4
         lda SND_LAST_WAS_RIGHT
-        beq ++
+        +bzs ++
         ; here: SND_LAST_WAS_RIGHT != 0
 
         lda #1
@@ -1859,6 +1863,7 @@ play_new:
         sta SND_LAST_WAS_RIGHT
 ++
 
+        ; Handling SND_TURNED_OFF signal and potentially stop sequencer.
         lda SND_TURNED_OFF
         +bzs +
         ; don't play and make sure that all voices set to not produce any
@@ -1879,9 +1884,9 @@ play_new:
         ; if (duration1 >= hardrestartcounter) {
         ;   goto branch2
         ; }
-        ; *ATTACK_DUR_VOICE1 = x
-        ; *SUSTAIN_REL_VOICE1 = x
-        ; *CONTROL_VOICE1 = x
+        ; ATTACK_DUR_VOICE1 = x
+        ; SUSTAIN_REL_VOICE1 = x
+        ; CONTROL_VOICE1 = x
         ; goto branch1109
         ldx #$00
 		dec duration1
@@ -1910,7 +1915,7 @@ play_new:
         ; y = 2
         ; goto branch1109
         ;
-        ldy #$00			//voice1
+        ldy #$00		; voice1
 		lda (voice1pointer),y
 		sta sound1pointer
 		iny
@@ -1942,9 +1947,9 @@ play_new:
         ;   *(voice1pointer+3+x) = *(voiceloop+3+x)
         ;   *(duration1+x) = 1 // duration[x] = 1
         ; }
-        ; *CONTROL_VOICE1 = 8
-        ; *CONTROL_VOICE2 = 8
-        ; *CONTROL_VOICE3 = 8
+        ; CONTROL_VOICE1 = 8
+        ; CONTROL_VOICE2 = 8
+        ; CONTROL_VOICE3 = 8
         ; return
         ldx #$02
 .loop3:
@@ -1997,7 +2002,7 @@ play_new:
         ;   *CONTROL_VOICE1 = x
         ;   goto sub_fill_voice_2
         ; }
-        dec duration3		//voice3
+        dec duration3		; voice3
 		beq .fill_voice_3
 		lda duration3
 		cmp #hardrestartcounter
@@ -2041,8 +2046,8 @@ play_new:
 		sta voice3pointer+1
 		ldy #$00
 		lda (sound3pointer),y
-		sta SUSTAIN_REL_VOICE3		//sr
-		sty ATTACK_DUR_VOICE3		//ad
+		sta SUSTAIN_REL_VOICE3		; sr
+		sty ATTACK_DUR_VOICE3		; ad
 		iny
 		sty CONTROL_VOICE3          ; sync with voice 1 (2 actually?)
 		sty sound3index
@@ -2157,10 +2162,10 @@ play_new:
 		ldy #$00
 		sty vibratoindex
 		lda (sound2pointer),y
-		sta SUSTAIN_REL_VOICE2		//sr
-		sty ATTACK_DUR_VOICE2		//ad
+		sta SUSTAIN_REL_VOICE2		; sr
+		sty ATTACK_DUR_VOICE2		; ad
 		iny
-		sty CONTROL_VOICE2		//wave
+		sty CONTROL_VOICE2		; wave
 		lda (sound2pointer),y
 		sta pulsecontrol
 		iny
@@ -2273,7 +2278,7 @@ play_new:
 		sta vibratoindex
 		rts
 .branch1230:
-        sta FREQ_LO_VOICE2		//obsolete ?
+        sta FREQ_LO_VOICE2		; obsolete ?
 		lda freqhi,x
 		sta FREQ_LO_VOICE2
 		rts
