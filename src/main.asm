@@ -1425,18 +1425,6 @@ reset_screen
     sta KEY_PRESS_TIMER
 }
 
-!macro turn_sound_on {
-    lda SID_MAIN_CONTROL
-    ora #0b1111
-    sta SID_MAIN_CONTROL
-}
-
-!macro turn_sound_off {
-    lda SID_MAIN_CONTROL
-    and #0b11110000
-    sta SID_MAIN_CONTROL
-}
-
 handle_key_presses
     ; we wait a fixed amount of ISR invocations between key presses
     ; to debounce.
@@ -1505,16 +1493,13 @@ handle_key_presses
 
 .z_not_pressed
 
-
     ; we now know if we need to toggle sound on or not.
     ; let's do that now!
     ;
     ; if SND_TURN_SOUND_ON and SND_TURNED_OFF:
-    ;   turn_sound_on()
     ;   SND_TURNED_OFF = False
     ;
     ; if not SND_TURN_SOUND_ON and not SND_TURNED_OFF:
-    ;   turn_sound_off()
     ;   SND_TURNED_OFF = True
     +dbgblt $200, $0
     lda SND_TURN_SOUND_ON
@@ -1522,7 +1507,6 @@ handle_key_presses
     lda SND_TURNED_OFF
     +bzs ++ ; SND_TURNED_OFF must be 1, therefore we bail if zero is set
     +dbgblt $200, $ff
-    +turn_sound_on
     lda #0
     sta SND_TURNED_OFF
     jmp ++
@@ -1532,7 +1516,6 @@ handle_key_presses
     lda SND_TURNED_OFF
     +bzc ++ ; SND_TURNED_OFF must be 0, therefore we bail if zero is clear
     +dbgblt $200, 1
-    +turn_sound_off
     lda #1
     sta SND_TURNED_OFF
 ++
@@ -1875,6 +1858,18 @@ play_new:
         lda #0
         sta SND_LAST_WAS_RIGHT
 ++
+
+        lda SND_TURNED_OFF
+        +bzs +
+        ; don't play and make sure that all voices set to not produce any
+        ; sound to avoid 'hanging' tones when being stopped in the middle
+        ; of a sound sequence.
+		lda #$08
+		sta CONTROL_VOICE1
+		sta CONTROL_VOICE2
+		sta CONTROL_VOICE3
+        rts
++
 
         ; x = 0
         ; duration1--
