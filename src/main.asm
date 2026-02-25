@@ -138,49 +138,16 @@ clearscr_loop
 ;
 
 ; ZERO PAGE LAYOUT
-
-; sound output uses $30-$47
-!set i =$30
-!set voice1pointer=i
-!set i = i + 2
-!set voice2pointer=i
-!set i = i + 2
-!set voice3pointer=i
-!set i = i + 2
-!set sound1pointer=i
-!set i = i + 2
-!set sound2pointer=i
-!set i = i + 2
-!set sound3pointer=i
-!set i = i + 2
-!set duration1=i
-!set i = i + 1
-!set duration2=i
-!set i = i + 1
-!set duration3=i
-!set i = i + 1
-!set sound1index=i
-!set i = i + 1
-!set note3=i
-!set i = i + 1
-!set sound2index=i
-!set i = i + 1
-!set note2=i
-!set i = i + 1
-!set sound3index=i
-!set i = i + 1
-!set pulsecontrol=i
-!set i = i + 1
-!set vibratopointer=i
-!set i = i + 2
-!set vibratoindex=i
-
 !addr KEY_PRESS_TIMER = $87
-!addr SND_LAST_WAS_RIGHT = $88
 !addr SND_TURN_SOUND_ON = $89
 !addr RNG_STATE_LO = $90
 !addr RNG_STATE_HI = $91
 !addr SND_TURNED_OFF = $92
+!addr FOO1 = $93
+!addr FOO2 = $94
+!addr FREQ_LO_VOICE1_BUF = $95
+!addr FREQ_HI_VOICE1_BUF = $96
+!addr PLAY_COUNTER = $97
 
 
 ; MEMORY LAYOUT
@@ -191,24 +158,26 @@ clearscr_loop
 !addr FREQ_LO_VOICE1 = $d400
 !addr FREQ_HI_VOICE1 = $d401
 !addr CONTROL_VOICE1 = $d404
-!addr ATTACK_DUR_VOICE1 = $d405
-!addr SUSTAIN_REL_VOICE1 = $d406
+!addr ATTACK_DECAY_VOICE1 = $d405
+!addr SUSTAIN_RELEASE_VOICE1 = $d406
 !addr WAV_DUTY_LO_VOICE1 = $d402
 !addr WAV_DUTY_HI_VOICE1 = $d403
 
 !addr FREQ_LO_VOICE2 = $d407
 !addr FREQ_HI_VOICE2 = $d408
-!addr PULSE_DUTY_LO_VOICE2 = $d409
-!addr PULSE_DUTY_HI_VOICE2 = $d40a
+!addr WAV_DUTY_LO_VOICE2 = $d409
+!addr WAV_DUTY_HI_VOICE2 = $d40a
 !addr CONTROL_VOICE2 = $d40b
-!addr ATTACK_DUR_VOICE2 = $d40c
-!addr SUSTAIN_REL_VOICE2 = $d40d
+!addr ATTACK_DECAY_VOICE2 = $d40c
+!addr SUSTAIN_RELEASE_VOICE2 = $d40d
 
 !addr FREQ_LO_VOICE3 = $d40e
 !addr FREQ_HI_VOICE3 = $d40f
+!addr WAV_DUTY_LO_VOICE3 = $d410
+!addr WAV_DUTY_HI_VOICE3 = $d411
 !addr CONTROL_VOICE3 = $d412
-!addr ATTACK_DUR_VOICE3 = $d413
-!addr SUSTAIN_REL_VOICE3 = $d414
+!addr ATTACK_DECAY_VOICE3 = $d413
+!addr SUSTAIN_RELEASE_VOICE3 = $d414
 
 !addr FILTER_CUTOFF_HI = $d416
 !addr FILTER_CUTOFF_LO = $d415
@@ -252,18 +221,6 @@ clearscr_loop
 !addr SCREEN_MASK_OR_5 = $C645
 !addr SCREEN_MASK_OR_6 = $C646
 !addr SCREEN_MASK_OR_7 = $C647
-
-
-!addr voice1loop_current = $C650
-!addr voice2loop_current = $C652
-!addr voice3loop_current = $C654
-
-!addr voice1_switch_left_request = $C655
-!addr voice2_switch_left_request = $C656
-!addr voice3_switch_left_request = $C657
-!addr voice1_switch_right_request = $C658
-!addr voice2_switch_right_request = $C659
-!addr voice3_switch_right_request = $C65A
 
 
 lda#0b00000001
@@ -316,18 +273,9 @@ jsr rng_seed
 
 
 lda #0
-sta SND_LAST_WAS_RIGHT
 sta KEY_PRESS_TIMER
 sta SND_TURN_SOUND_ON
 
-
-
-sta voice1_switch_left_request
-sta voice2_switch_left_request
-sta voice3_switch_left_request
-sta voice1_switch_right_request
-sta voice2_switch_right_request
-sta voice3_switch_right_request
 
 
 !macro lshift_16bit .hb, .lb {
@@ -1249,19 +1197,6 @@ clear_rng_pixel
 
 
 
-
-voiceinit
-    !word voice1loop_default
-    !word voice2loop_default ;voice2
-    !word voice3loop_default ;voice3
-
-
-voiceloop
-    !word voice1loop_default
-    !word voice2loop_default
-    !word voice3loop_default
-
-
 ; initial pulse wave duty cycles for each voice
 ;
 init_values_pulse
@@ -1283,20 +1218,6 @@ init_values_pulse
 init_values_wave
     !byte $08,$08,$08
 
-play_durations
-play_duration_voice1
-    !byte $01
-play_duration_voice2
-    !byte $01
-play_duration_voice3
-    !byte $01
-
-
-off_duration
-    !byte $00
-
-vibrato_state
-    !byte $00
 
 
 ; global filter and main volume config for
@@ -1349,16 +1270,6 @@ init_sid
     lda #$00
     sta ATTACK_DUR_VOICE1,y
 
-    lda #$01
-    ;sta play_durations,x    ; reset play durations as well in case of program
-                            ; restarts without rebooting the machine
-    sta duration1,x
-
-    lda voiceinit,x
-    sta voice1pointer,x
-    lda voiceinit+3,x
-    sta voice1pointer+3,x
-
     lda init_values_sid,x
     sta FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
                             ; abuses x for writing several bytes but does not
@@ -1369,6 +1280,69 @@ init_sid
     tay
     dex
     bpl .loop2
+
+
+    ; TEST CODE PLS REMOVE THX
+
+    lda #0b01000001
+    sta CONTROL_VOICE1
+
+    ldy #29   ; D + 35c
+    lda freqlo,y
+    sta FREQ_LO_VOICE1
+    lda freqhi,y
+    sta FREQ_HI_VOICE1
+
+    ; wav duty is 12 bit =)
+    ; fun fact: half of 2^12 is 2^11!
+    lda #$ff
+    sta WAV_DUTY_LO_VOICE1
+    lda #7
+    sta WAV_DUTY_HI_VOICE1
+
+    lda #$00
+    sta ATTACK_DECAY_VOICE1
+    lda #$f0
+    sta SUSTAIN_RELEASE_VOICE1
+
+    ; setup voice 2
+    lda #0b01000001
+    sta CONTROL_VOICE2
+
+    lda #$ff
+    sta WAV_DUTY_LO_VOICE2
+    lda #7
+    sta WAV_DUTY_HI_VOICE2
+
+    lda #$00
+    sta ATTACK_DECAY_VOICE2
+    lda #$f0
+    sta SUSTAIN_RELEASE_VOICE2
+
+    ; setup voice 3
+    lda #0b01000001
+    sta CONTROL_VOICE3
+
+    lda #$ff
+    sta WAV_DUTY_LO_VOICE3
+    lda #7
+    sta WAV_DUTY_HI_VOICE3
+
+    lda #$00
+    sta ATTACK_DECAY_VOICE3
+    lda #$f0
+    sta SUSTAIN_RELEASE_VOICE3
+
+    lda #0
+    sta FOO1
+    lda #0
+    sta FOO2
+
+
+
+
+
+
     rts
 }
 
@@ -1564,99 +1538,6 @@ handle_key_presses
 
 .f_not_pressed
 
-    ; 'M' key press handler
-    ;
-    lda play_duration_voice1
-    clc
-    cmp #2
-    bcs .play_sound         ; if play duration is >1 play that sound
-
-    lda off_duration
-    bne .off
-
-    lda #0b11101111
-    sta $DC00
-
-    ; check if M key is pressed
-    lda $DC01
-    and #0b00010000
-    bne .addr_no_m
-
-    ; M key pressed
-    +set_key_press_timer
-
-    ; init playing of sound
-    clc
-    lda INT_M
-    lsr
-    lsr
-    lsr
-    adc #1
-    sta play_duration_voice1
-    sta off_duration
-    jsr .play_sound_voice1
-
-.play_sound
-    dec play_duration_voice1
-
-.addr_no_m
-    ; check if N key is pressed
-    lda $DC01
-    and #0b10000000
-    bne .no_key
-
-    ; N key handler
-    +set_key_press_timer
-    lda #1
-    sta play_duration_voice2
-    jsr .play_sound_voice2
-
-    rts
-.off
-    lda #00
-    sta CONTROL_VOICE1
-    dec off_duration
-    rts
-.no_key
-    lda #00
-    sta CONTROL_VOICE2
-    rts
-
-.play_sound_voice1
-    lda #$84
-    sta SUSTAIN_REL_VOICE1
-    lda #$0a
-    sta FREQ_HI_VOICE1
-    lda #$11
-    sta CONTROL_VOICE1
-    lda #0
-    sta ATTACK_DUR_VOICE1
-    rts
-
-.play_sound_voice2
-!set freq = $10
-    lda #$84
-    sta SUSTAIN_REL_VOICE2
-    clc
-    lda vibrato_state
-    beq .sub
-    lda #0
-    sta vibrato_state
-    lda #freq
-    adc INT_M
-    jmp .freq_modified
-.sub
-    lda #freq
-    sbc INT_M
-    lda #1
-    sta vibrato_state
-.freq_modified
-    sta FREQ_HI_VOICE2
-    lda #$11
-    sta CONTROL_VOICE2
-    lda #0
-    sta ATTACK_DUR_VOICE2
-
     rts
 }
 
@@ -1769,520 +1650,293 @@ waveinit:
 !addr SUSTAIN_REL_VOICE3 = $d414
 
 
-play: jmp play_new
 
 
 
-!zone my_play {
-
-voice2_switch_right:
-    lda <voice2loop_maj
-    sta <voice2pointer
-    sta voiceloop+2
-    sta <sound2pointer
-    lda >voice2loop_maj
-    sta >voice2pointer
-    sta voiceloop+3
-    sta >sound2pointer
-    lda #0
-    sta sound2index
-    rts
-
-voice2_switch_left:
-    lda <voice2loop_min
-    sta <voice2pointer
-    sta voiceloop+2
-    sta <sound2pointer
-    lda >voice2loop_min
-    sta >voice2pointer
-    sta voiceloop+3
-    sta >sound2pointer
-    lda #0
-    sta sound2index
-    rts
-
-voice1_switch_left:
-    lda <voice1loop_silent
-    sta <voice1pointer
-    sta voiceloop
-    sta <sound1pointer
-    lda >voice1loop_silent
-    sta >voice1pointer
-    sta voiceloop+1
-    sta >sound1pointer
-    lda #0
-    sta sound1index
-    rts
+!zone play {
 
 
-voice1_switch_right:
-    lda <voice1loop_default
-    sta <voice1pointer
-    sta voiceloop+0
-    sta <sound1pointer
-    lda >voice1loop_default
-    sta >voice1pointer
-    sta voiceloop+1
-    sta >sound1pointer
-    lda #0
-    sta sound1index
+!zone play_sub {
+!addr ACCU = $dc
+!addr P0 = $de
+!addr P2 = FP_YCUR
+!addr P3 = FP_YCUR+1
+
+!addr TEST = $C655
+
+mult_subroutine:
+    ;lda #<FREQ_LO_VOICE1
+    lda #<FILTER_CUTOFF_LO
+    sta $de
+    ;lda #>FREQ_HI_VOICE1
+    lda #>FILTER_CUTOFF_LO
+    sta $df
+
+    lda $d417
+    ora #0b11110001
+    sta $d417
+
+    !src "mult_subroutine.asm"
+}
+
+
+play:
+
+    lda FP_YCUR+0
+    sta $2010
+    lda FP_YCUR+1
+    sta $2012
+    lda FP_YCUR+2
+    sta $2014
+
+    jsr mult_subroutine
+
     rts
 
 
-play_new:
-        ; Look at the current X value and, if it is >=80 switch
-        lda INT_X
-        cmp #X_SEPARATOR
-        bcc +
-        ; X >= #X_SEPARATOR
-        lda SND_LAST_WAS_RIGHT
-        +bzc ++ ; jump if SND_LAST_WAS_RIGHT != 0
-        ; here: SND_LAST_WAS_RIGHT == 0
-        +SetBorderColor 3
+    ; filter cutoff; sounds nice!
+    lda $d417
+    ora #0b11110001
+    sta $d417
 
-        ;jsr switch_to_right
-        lda #1
-        ;sta voice1_switch_right_request
-        sta voice2_switch_right_request
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    sta FILTER_CUTOFF_LO
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$f0
+    lsr
+    lsr
+    lsr
+    lsr
+    sta FILTER_CUTOFF_HI
+    rts
 
-        lda #1
-        sta SND_LAST_WAS_RIGHT
-        jmp ++
-+
-        ; X < #X_SEPARATOR
-        +SetBorderColor 4
-        lda SND_LAST_WAS_RIGHT
-        +bzs ++
-        ; here: SND_LAST_WAS_RIGHT != 0
 
-        lda #1
-        ;sta voice1_switch_left_request
-        sta voice2_switch_left_request
 
-        lda #0
-        sta SND_LAST_WAS_RIGHT
-++
 
-        ; Handling SND_TURNED_OFF signal and potentially stop sequencer.
-        lda SND_TURNED_OFF
-        +bzs +
-        ; don't play and make sure that all voices set to not produce any
-        ; sound to avoid 'hanging' tones when being stopped in the middle
-        ; of a sound sequence.
-		lda #$08
-		sta CONTROL_VOICE1
-		sta CONTROL_VOICE2
-		sta CONTROL_VOICE3
-        rts
-+
+    rts
 
-        ; x = 0
-        ; duration1--
-        ; if (!duration1) {
-        ;   goto branch1
-        ; }
-        ; if (duration1 >= hardrestartcounter) {
-        ;   goto branch2
-        ; }
-        ; ATTACK_DUR_VOICE1 = x
-        ; SUSTAIN_REL_VOICE1 = x
-        ; CONTROL_VOICE1 = x
-        ; goto branch1109
-        ldx #$00
-		dec duration1
-		beq .branch1
-		lda duration1
-		cmp #hardrestartcounter
-		bcs .branch2
-		stx ATTACK_DUR_VOICE1
-		stx SUSTAIN_REL_VOICE1
-		stx CONTROL_VOICE1
-		jmp .branch1109
 
-.branch1:
-        ; y = 0
-        ; <sound1pointer = *(voice1pointer + y++)
-        ; if (!*(voice1poiner + y))
-        ;    goto restartmusic
-        ; >sound1pointer = *(voice1pointer + y++)
-        ; duration1 = *(voice1pointer + y++)
-        ; voice1pointer += 3
-        ; y = 0
-        ; SUSTAIN_REL_VOICE1 = *(sound1pointer + y++)
-        ; ATTACK_DUR_VOICE1 = 1
-        ; CONTROL_VOICE1 = 2
-        ; sound1index = 2
-        ; y = 2
-        ; goto branch1109
-        ;
-        ldy #$00		; voice1
-		lda (voice1pointer),y
-		sta sound1pointer
-		iny
-		lda (voice1pointer),y
-		beq .restartmusic
-		sta sound1pointer+1
-		iny
-		lda (voice1pointer),y
-		sta duration1
-		lda voice1pointer
-		clc
-		adc #$03
-		sta voice1pointer
-		lda voice1pointer+1
-		adc #$00
-		sta voice1pointer+1
-		ldy #$00
-		lda (sound1pointer),y
-		sta SUSTAIN_REL_VOICE1
-		sty ATTACK_DUR_VOICE1
-		iny
-		sty CONTROL_VOICE1
-		sty sound1index
-		jmp .branch1109
+    ; filter cutoff; sounds nice!
+    lda $d417
+    ora #0b11110001
+    sta $d417
 
-.restartmusic:
-        ; for (x=2; x >= 0; x--) {
-        ;   *(voice1pointer+x) = *(voiceloop+x)
-        ;   *(voice1pointer+3+x) = *(voiceloop+3+x)
-        ;   *(duration1+x) = 1 // duration[x] = 1
-        ; }
-        ; CONTROL_VOICE1 = 8
-        ; CONTROL_VOICE2 = 8
-        ; CONTROL_VOICE3 = 8
-        ; return
-        ldx #$02
-.loop3:
-        lda voiceloop,x
-		sta voice1pointer,x
-		lda voiceloop+3,x
-		sta voice1pointer+3,x
-		lda #$01
-		sta duration1,x
-		dex
-		bpl .loop3
-		lda #$08
-		sta CONTROL_VOICE1
-		sta CONTROL_VOICE2
-		sta CONTROL_VOICE3  ; set all voices to 'test'?
-		rts
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    sta FILTER_CUTOFF_LO
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$f0
+    lsr
+    lsr
+    lsr
+    lsr
+    sta FILTER_CUTOFF_HI
+    rts
 
-.branch2:
-        ; // read sound1
-        ;
-        ; y = *sound1index
-        ; a = *(sound1pointer + y)
-        ; if (!a) {
-        ;   goto branch1109
-        ; }
-        ; *FREQ_HI_VOICE1 = a
-        ; y++
-        ; *CONTROL_VOICE1 = *(sound1pointer + y)
-        ; y++
-        ; *soundindex = y
-        ldy sound1index
-		lda (sound1pointer),y
-		beq .branch1109
-		sta FREQ_HI_VOICE1
-		iny
-		lda (sound1pointer),y
-		sta CONTROL_VOICE1
-		iny
-		sty sound1index
-.branch1109:
-        ; duration3--
-        ; if (!duration3) {
-        ;    goto fill_voice_3
-        ; } else {
-        ;   if (duration3 >= hardrestartcounter)
-        ;       goto branch1151
-        ;   // hard reset?
-        ;   *ATTACK_DUR_VOICE1 = x
-        ;   *SUSTAIN_REL_VOICE1 = x
-        ;   *CONTROL_VOICE1 = x
-        ;   goto sub_fill_voice_2
-        ; }
-        dec duration3		; voice3
-		beq .fill_voice_3
-		lda duration3
-		cmp #hardrestartcounter
-		bcs .branch1151
-		stx ATTACK_DUR_VOICE1
-		stx SUSTAIN_REL_VOICE1
-		stx CONTROL_VOICE1
-		jmp .sub_fill_voice_2
-.fill_voice_3:
-        ; y = 0
-        ; *sound3pointer = *(voice3pointer + y++)
-        ; *(sound3pointer+1) = *(voice3pointer + y++)
-        ; *duration3 = *(voice3pointer + y++)
-        ; *note3 = *(voice3pointer + y++)
-        ; voice3pointer += 4
-        ;
-        ; *SUSTAIN_REL_VOICE3 = *(sound3pointer)
-        ; *ATTACK_DUR_VOICE3 = 0
-        ; *CONTROL_VOICE3 = 1 // sync with voice 2
-        ; sound3index = 1
-        ;
-        ; goto sub_fill_voice_2
-        ldy #$00
-		lda (voice3pointer),y
-		sta sound3pointer
-		iny
-		lda (voice3pointer),y
-		sta sound3pointer+1 ; (uint16_t)sound3pointer = (uint16_t)voice3pointer
-		iny
-		lda (voice3pointer),y
-		sta duration3
-		iny
-		lda (voice3pointer),y
-		sta note3
-		lda voice3pointer
-		clc
-		adc #$04
-		sta voice3pointer
-		lda voice3pointer+1
-		adc #$00
-		sta voice3pointer+1
-		ldy #$00
-		lda (sound3pointer),y
-		sta SUSTAIN_REL_VOICE3		; sr
-		sty ATTACK_DUR_VOICE3		; ad
-		iny
-		sty CONTROL_VOICE3          ; sync with voice 1 (2 actually?)
-		sty sound3index
-		jmp .sub_fill_voice_2
 
-.branch1151:
-        ; y = sound3index
-        ; a = *(sound3pointer + y)
-        ; if (!a)
-        ;   goto branch115e
-        ; if (a != 0xff) // stop byte
-        ;   goto branch1166
-        ldy sound3index
-		lda (sound3pointer),y
-		beq .branch115e
-		cmp #$ff
-		bne .branch1166
-		jmp .sub_fill_voice_2
-.branch115e:
-        ; // increment sound3index
-        ;
-        ; y++
-        ; sound3index = *(sound3pointer + y)
-        ; y = a
-        ; a = *(sound3pointer + y)
-        iny
-		lda (sound3pointer),y
-		sta sound3index
-		tay
-		lda (sound3pointer),y
-.branch1166:
-        ; *filter = a
-        ; *wave = *(sound3pointer + y++)
-        ; sound3index = ++y
-        ; // note table lookup? note3 is set from voice3pointer
-        ; a = *(sound3pointer + y) + note3
-        ; y = a
-        ; *$d40f = *(freqhi + y)
-        ; *d40e = *(freqlo + y)
-        sta $d416		; filter
-		iny
-		lda (sound3pointer),y
-		sta $d412		; wave
-		iny
-		lda (sound3pointer),y
-		iny
-		sty sound3index
-		clc
-		adc note3
-		tay
-		lda freqhi,y
-		sta $d40f
-		lda freqlo,y
-		sta $d40e
-.sub_fill_voice_2:
-        ; duration2--
-        ; if (!duration2)
-        ;    goto fill_voice_2
-        ; if (duration2 >= hardrestartcounter)
-        ;    goto branch11da
-        ; *ATTACK_DUR_VOICE1 = x
-        ; *SUSTAIN_REL_VOICE1 = x
-        ; *CONTROL_VOICE1 = x
-        ; return
-        dec duration2			; voice2
-		beq .fill_voice_2
-		lda duration2
-		cmp #hardrestartcounter
-		bcs .branch11da
-		stx ATTACK_DUR_VOICE1
-		stx SUSTAIN_REL_VOICE1
-		stx CONTROL_VOICE1
-		rts
-.fill_voice_2:
-        ; y = 0
-        ; <sound2pointer = *(voice2pointer + y++)
-        ; >sound2pointer = *(voice2pointer + y++)
-        ; duration2 = *(voice2pointer + y++)
-        ; note2 = *(voice2pointer + y++)
-        ; voice2pointer += 4
-        ; y = 0
-        ; vibratoindex = y      // 0
-        ; SUSTRAIN_REL_VOICE2 = *(sound2pointer + y)
-        ; ATTACK_DUR_VOICE2 = 0
-        ; y++
-        ; CONTROL_VOICE2 = y    // 1
-        ; pulsecontrol = *(sound2pointer + y)
-        ; y++
-        ; <vibratopointer = *(sound2pointer + y++)
-        ; >vibratopointer = *(sound2pointer + y++)
-        ; sound2index = y
-        ; return
-        ldy #$00
-		lda (voice2pointer),y
-		sta sound2pointer
-		iny
-		lda (voice2pointer),y
-		sta sound2pointer+1
-		iny
-		lda (voice2pointer),y
-		sta duration2
-		iny
-		lda (voice2pointer),y
-		sta note2
-		lda voice2pointer
-		clc
-		adc #$04
-		sta voice2pointer
-		lda voice2pointer+1
-		adc #$00
-		sta voice2pointer+1
-		ldy #$00
-		sty vibratoindex
-		lda (sound2pointer),y
-		sta SUSTAIN_REL_VOICE2		; sr
-		sty ATTACK_DUR_VOICE2		; ad
-		iny
-		sty CONTROL_VOICE2		; wave
-		lda (sound2pointer),y
-		sta pulsecontrol
-		iny
-		lda (sound2pointer),y
-		sta vibratopointer
-		iny
-		lda (sound2pointer),y
-		sta vibratopointer+1
-		iny
-		sty sound2index
-		rts
-.branch11da:
-        ; y = sound2index
-        ; a = *(sound2pointer + y)
-        ; if (!a) {
-        ;    // silence? skip to next sound
-        ;    goto branch11e5
-        ; }
-        ; if (a != 0xff) {
-        ;    goto branch11ed
-        ; }
-        ; return
-        ldy sound2index
-		lda (sound2pointer),y
-		beq .branch11e5
-		cmp #$ff
-		bne .branch11ed
-		rts
-.branch11e5:
-        ; y++
-        ; sound2index = *(sound2pointer + y)
-        ; y = a
-        ; a = *(sound2pointer + y)
-        iny
-		lda(sound2pointer),y
-		sta sound2index
-		tay
-		lda (sound2pointer),y
-.branch11ed:
-        ; CONTROL_VOICE2 = a
-        ; if (!pulsecontrol) {
-        ;    goto branch1200
-        ; }
-        ; y++
-        ; PULSE_DUTY_LO_VOICE2 = *(sound2pointer + y++)
-        ; PULSE_DUTY_HI_VOICE2 = *(sound2pointer + y++)
-        sta $d40b		; wave
-		lda pulsecontrol
-		beq .branch1200
-		iny
-		lda (sound2pointer),y
-		sta $d409		; pulselow
-		iny
-		lda (sound2pointer),y
-		sta $d40a		; pulsehigh
-.branch1200:
-        ; y++
-        ; a = *(sound2pointer + y)
-        ; y++
-        ; sound2index = y
-        ; a += note2
-        ; x = a
-        ; a = freqlo[x]    // note -> freq lookup
-        ; y = vibratoindex
-        ; y++
-        ; a += *(vibratopointer+y)
-        ; FREQ_LO_VOICE2 = a
-        ; y--
-        ; a = freqhi[x]
-        ; a += *(vibratopointer+y)
-        ; FREQ_HI_VOICE2 = a
-        ; y++
-        ; y++
-        ; a = *(vibratopointer+y)
-        ; if (a == 0x80) { // -1
-        ;   goto branch122a
-        ; }
-        ; y = vibratoindex
-        ; return
-        iny
-		lda (sound2pointer),y
-		iny
-		sty sound2index
-		clc
-		adc note2
-		tax
-		lda freqlo,x
-		ldy vibratoindex
-		iny
-		clc
-		adc (vibratopointer),y
-		sta FREQ_LO_VOICE2
-		dey
-		lda freqhi,x
-		adc (vibratopointer),y
-		sta FREQ_HI_VOICE2
-		iny
-		iny
-		lda (vibratopointer),y
-		cmp #$80
-		beq .branch122a
-		sty vibratoindex
-		rts
-.branch122a:
-        ; y++
-        ; vibratoindex = *(vibratopointer + y)
-        ; return
-        iny
-		lda (vibratopointer),y
-		sta vibratoindex
-		rts
-.branch1230:
-        sta FREQ_LO_VOICE2		; obsolete ?
-		lda freqhi,x
-		sta FREQ_LO_VOICE2
-		rts
 
+    ; PWM sweep with attractor
+    ; sounds nice
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    sta WAV_DUTY_LO_VOICE1
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$f0
+    lsr
+    lsr
+    lsr
+    lsr
+    sta WAV_DUTY_HI_VOICE1
+
+    rts
+
+
+    lda FP_YCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE1
+    lda FP_YCUR+2
+    sta FREQ_LO_VOICE1
+
+    lda FP_XCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE2
+    lda FP_XCUR+2
+    sta FREQ_LO_VOICE2
+
+    lda FP_ZCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE3
+    lda FP_ZCUR+2
+    sta FREQ_LO_VOICE3
+
+    rts
+
+
+    ; arpeggio attempt
+
+    ldy #29
+    lda freqlo,y
+    sta FREQ_LO_VOICE1_BUF
+    lda freqhi,y
+    sta FREQ_HI_VOICE1_BUF
+
+    ; >>> Counter([n >> 5 for n in range(0, 256)])
+    ; Counter({0: 32, 1: 32, 2: 32, 3: 32, 4: 32, 5: 32, 6: 32, 7: 32})
+    lda PLAY_COUNTER
+    lsr
+    lsr
+    lsr
+    lsr
+    lsr
+
+    tay
+    lda arpeggio,y
+    clc
+    adc #29
+    tay
+    sec
+    lda freqlo,y
+    sbc FREQ_LO_VOICE1_BUF
+    sta FOO1
+    lda freqhi,y
+    sbc FREQ_HI_VOICE1_BUF
+    sta FOO2
+
+
+    ldy #29
+    clc
+    lda freqlo,y
+    adc FOO1
+    sta FREQ_LO_VOICE1_BUF
+    lda freqhi,y
+    adc FOO2
+    sta FREQ_HI_VOICE1_BUF
+
+
+    lda FREQ_LO_VOICE1_BUF
+    sta FREQ_LO_VOICE1
+    lda FREQ_HI_VOICE1_BUF
+    sta FREQ_HI_VOICE1
+
+    lda #16
+    clc
+    adc PLAY_COUNTER
+    sta PLAY_COUNTER
+
+
+
+
+    rts
+
+    ; vibrato testing
+
+    ldy #29
+    lda freqlo,y
+    sta FREQ_LO_VOICE1_BUF
+    lda freqhi,y
+    sta FREQ_HI_VOICE1_BUF
+
+    lda PLAY_COUNTER
+    cmp #127
+    bcs .no_vibrato
+
+    lda #29
+    clc
+    adc #7
+    tay
+    sec
+    lda freqlo,y
+    sbc FREQ_LO_VOICE1_BUF
+    sta FOO1
+    lda freqhi,y
+    sbc FREQ_HI_VOICE1_BUF
+    sta FOO2
+
+    ldy #29
+    clc
+    lda freqlo,y
+    adc FOO1
+    sta FREQ_LO_VOICE1_BUF
+    lda freqhi,y
+    adc FOO2
+    sta FREQ_HI_VOICE1_BUF
+.no_vibrato
+
+    lda FREQ_LO_VOICE1_BUF
+    sta FREQ_LO_VOICE1
+    lda FREQ_HI_VOICE1_BUF
+    sta FREQ_HI_VOICE1
+
+    lda #48
+    clc
+    adc PLAY_COUNTER
+    sta PLAY_COUNTER
+
+
+    rts
+
+    lda FP_YCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE1
+    lda FP_YCUR+2
+    sta FREQ_LO_VOICE1
+    lda FP_YCUR
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    sta WAV_DUTY_LO_VOICE1
+    lda FP_YCUR
+    and #$f0
+    lsr
+    lsr
+    lsr
+    lsr
+    sta WAV_DUTY_HI_VOICE1
+
+    rts
+
+    lda FP_XCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE2
+    lda FP_XCUR+2
+    sta FREQ_LO_VOICE2
+    lda FP_XCUR
+    sta WAV_DUTY_LO_VOICE2
+    lda #0
+    sta WAV_DUTY_HI_VOICE2
+
+    lda FP_ZCUR+1
+    eor #0b10000000
+    sta FREQ_HI_VOICE3
+    lda FP_ZCUR+2
+    sta FREQ_LO_VOICE3
+    lda FP_ZCUR
+    sta WAV_DUTY_LO_VOICE3
+    lda #0
+    sta WAV_DUTY_HI_VOICE3
+
+    rts
 }
 
 
@@ -2316,447 +1970,5 @@ freqhi:
 !byte	$6a,$70,$77,$7e,$86,$8e,$96,$9f
 !byte	$a8,$b3,$bd,$c8,$d4,$e1,$ee,$fd
 
-; ------------------------------------------------------------
-; sounddata
-; format voice1 (Drumtrack):
-; .byte SR Value
-; .byte Freqhi,wave
-; .byte Freqhi,wave - if freqhi=0 -> end of sound
-
-silence01:
-!byte $00, $00, $08, $00
-
-basedrum:				    ; basedrum
-!byte $f7,$dd,$81,$0c,$11,$0a,$11,$08,$11,$06,$10,$03,$10,$00
-
-snare:
-!byte $f9,$fc,$81,$0e,$41,$5c,$81,$0d,$40,$80,$3c,$0a,$40,$3b,$80,$00
-
-hihat:
-!byte $84,$fe,$81,$d0,$80,$a0,$80,$00
-
-
-; ------------------------------------------------------------
-; format voice2 (vibratotrack):
-; first frame
-; .byte SR Value
-; .byte pulsecontrol    =$0 -> pulse off, other -> pulse on
-; .word vibratooffset
-; following frames
-; .byte wave		=$0 -> next byte is loopindex, =$FF -> end
-; .byte noteoffset
-; if pulse = on
-; .byte wave,pulselow,pulsehigh,noteoffset
-
-silence02:					; silence
-!byte $00,$00
-!word novibrato
-!byte $08,$00,$ff
-
-
-chord_min:
-!byte $6a,$01
-!word novibrato
-!byte $41,$00,$04,$00
-!byte $41,$20,$04,$00
-!byte $40,$40,$04,$00
-!byte $40,$60,$04,$07
-!byte $40,$80,$04,$07
-!byte $40,$60,$04,$07
-!byte $40,$40,$04,$0f
-!byte $40,$20,$04,$0f
-!byte $40,$00,$04,$0f
-!byte $40,$00,$04,$0c
-!byte $40,$20,$04,$0c
-!byte $00,$0c
-
-chord_maj:
-!byte $6a,$01
-!word novibrato
-!byte $41,$00,$04,$00
-!byte $41,$20,$04,$00
-!byte $40,$40,$04,$00
-!byte $40,$60,$04,$07
-!byte $40,$80,$04,$07
-!byte $40,$60,$04,$07
-!byte $40,$40,$04,$10
-!byte $40,$20,$04,$10
-!byte $40,$00,$04,$10
-!byte $40,$00,$04,$0c
-!byte $40,$20,$04,$0c
-!byte $00,$0c
-
-chord1:
-!byte $6a,$01
-!word novibrato
-!byte $41,$00,$04,$00
-!byte $41,$20,$04,$00
-!byte $40,$40,$04,$00
-!byte $40,$60,$04,$07
-!byte $40,$80,$04,$07
-!byte $40,$60,$04,$07
-!byte $40,$40,$04,$0a
-!byte $40,$20,$04,$0a
-!byte $40,$00,$04,$0a
-!byte $40,$00,$04,$00
-!byte $40,$20,$04,$00
-!byte $00,$0c
-
-chord2:
-!byte $6a,$01
-!word novibrato
-!byte $41,$00,$04,$02
-!byte $41,$20,$04,$02
-!byte $40,$40,$04,$02
-!byte $40,$60,$04,$07
-!byte $40,$80,$04,$07
-!byte $40,$60,$04,$07
-!byte $40,$40,$04,$0e
-!byte $40,$20,$04,$0e
-!byte $40,$00,$04,$0e
-!byte $40,$00,$04,$02
-!byte $40,$20,$04,$02
-!byte $00,$0c
-
-
-
-
-; ------------------------------------------------------------
-; format voice3 (filtertrack):
-; first frame
-; !byte SR Value
-; following frames
-; !byte Filterhigh,wave,noteoffset
-; note: if filterhigh=$00, next byte is loopindex. if filterhigh=$ff ->end
-
-silence03:					; silence
-!byte $00
-!byte $fe,$08,$00
-!byte $ff
-
-filterbass:
-!byte $b9
-!byte $f0,$41,$00
-!byte $a0,$41,$00
-!byte $50,$41,$00
-!byte $20,$41,$00
-!byte $18,$41,$01
-!byte $14,$41,$00
-!byte $10,$41,$00
-!byte $0c,$40,$ff
-!byte $08,$40,$00
-!byte $ff
-
-
-
-
-; ------------------------------------------------------------
-; vibratotable
-; .byte addvalue-high,addvalue-low	if highbyte=$80 -> next byte=loopindex
-
-novibrato:			; empty
-!byte $00,$00,$80,$00
-
-
-
-; ------------------------------------------------------------
-; musicdata
-
-voice1loop:
-voice1loop_default:
-
-; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
-
-
-; simple rythm
-; -------------
-!word basedrum
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-!word snare
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-
-; simple rythm
-; -------------
-!word basedrum
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-!word snare
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-
-; simple rythm
-; -------------
-!word basedrum
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-!word snare
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-
-; simple rythm+doublesnare
-; -------------
-!word basedrum
-!byte $0c
-!word hihat
-!byte $06
-!word hihat
-!byte $06
-!word snare
-!byte $06
-!word snare
-!byte $06
-!word hihat
-!byte $06
-!word snare
-!byte $06
-
-
-!word $0000
-
-
-; voice1 silent track
-voice1loop_silent:
-
-; format .word soundoffset, .byte duration   if soundoffset=0000 then loop
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-
-!word silence01
-!byte $0c
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-!word silence01
-!byte $06
-
-!word $0000
-
-
-; ------------------------------------------------------------
-voice2:
-voice2loop_default:
-voice2loop_min:
-
-; format .word soundoffset, .byte duration,note
-
-!word chord_min
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-!word chord_min
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-!word chord_maj
-!byte $24,$32
-!word silence02
-!byte $0c,$00
-
-!word chord_min
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-
-voice2loop_maj:
-
-!word chord_maj
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-!word chord_maj
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-!word chord_maj
-!byte $24,$2f
-!word silence02
-!byte $0c,$00
-
-!word chord_maj
-!byte $24,$34
-!word silence02
-!byte $0c,$00
-
-
-voice2loop_silent:
-
-!word silence02
-!byte $0c,$00
-!word silence02
-!byte $0c,$00
-
-!word silence02
-!byte $0c,$00
-!word silence02
-!byte $0c,$00
-
-!word silence02
-!byte $0c,$00
-!word silence02
-!byte $0c,$00
-
-!word silence02
-!byte $0c,$00
-!word silence02
-!byte $0c,$00
-
-
-; ------------------------------------------------------------
-voice3:
-voice3loop_default:
-voice3loop_left_1:
-
-; format .word soundoffset, .byte duration,note
-
-!word filterbass
-!byte $12,$1c
-!word filterbass
-!byte $12,$1c
-!word filterbass
-!byte $0c,$15
-
-!word filterbass
-!byte $12,$18
-!word silence03
-!byte $1e,$00
-
-!word filterbass
-!byte $12,$1a
-!word filterbass
-!byte $12,$1a
-!word filterbass
-!byte $0c,$17
-
-!word filterbass
-!byte $12,$1c
-!word silence03
-!byte $1e,$00
-
-
-
-voice3loop_silent:
-
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-
-
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-
-!word silence03
-!byte $1e,$00
-!word silence03
-!byte $1e,$00
-
-
-
-voice3loop_maj:
-voice3loop_right_1:
-!word filterbass
-!byte $12,$1c
-!word filterbass
-!byte $12,$1c
-!word filterbass
-!byte $0c,$15
-
-!word filterbass
-!byte $12,$19
-!word silence03
-!byte $1e,$00
-
-!word filterbass
-!byte $12,$1b
-!word filterbass
-!byte $12,$1b
-!word filterbass
-!byte $0c,$17
-
-!word filterbass
-!byte $12,$1c
-!word silence03
-!byte $1e,$00
-
-
-
-; vim:ft=acme
+arpeggio:
+!byte   0,4,7,11,7,4,0,4

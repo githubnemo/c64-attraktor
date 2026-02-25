@@ -16,6 +16,10 @@ SRCS = \
 
 all: d64
 
+main.asm: mult.c
+	oscar64 -g mult.c
+	python extract_subroutine.py mult.asm foo > mult_subroutine.asm
+
 $(OUTPUT): $(SRCS)
 	$(AS) -o $(OUTPUT) $(ASFLAGS) $(SRCS)
 
