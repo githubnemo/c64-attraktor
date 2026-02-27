@@ -1339,7 +1339,6 @@ init_sid
     sta FOO2
 
 
-
     lda $d417
     ora #0b11110001
     sta $d417
@@ -1664,7 +1663,8 @@ waveinit:
 !addr ACCU = $dc
 !addr P0 = $de
 !addr P2 = FP_YCUR
-!addr P3 = FP_YCUR+1
+!addr P3 = FP_YCUR+2
+!addr P4 = FP_YCUR+1
 
 !addr TEST = $C650
 
