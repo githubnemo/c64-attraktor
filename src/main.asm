@@ -1340,6 +1340,9 @@ init_sid
 
 
 
+    lda $d417
+    ora #0b11110001
+    sta $d417
 
 
 
@@ -1657,24 +1660,23 @@ waveinit:
 
 
 !zone play_sub {
+
 !addr ACCU = $dc
 !addr P0 = $de
 !addr P2 = FP_YCUR
 !addr P3 = FP_YCUR+1
 
-!addr TEST = $C655
+!addr TEST = $C650
 
 mult_subroutine:
     ;lda #<FREQ_LO_VOICE1
-    lda #<FILTER_CUTOFF_LO
+    ;lda #<FILTER_CUTOFF_LO
+    lda #<TEST
     sta $de
-    ;lda #>FREQ_HI_VOICE1
-    lda #>FILTER_CUTOFF_LO
+    ;lda #>FREQ_LO_VOICE1
+    ;lda #>FILTER_CUTOFF_LO
+    lda #>TEST
     sta $df
-
-    lda $d417
-    ora #0b11110001
-    sta $d417
 
     !src "mult_subroutine.asm"
 }
@@ -1690,6 +1692,30 @@ play:
     sta $2014
 
     jsr mult_subroutine
+
+    +rshift_16bit TEST+1, TEST
+    +rshift_16bit TEST+1, TEST
+    +rshift_16bit TEST+1, TEST
+    +rshift_16bit TEST+1, TEST
+    +rshift_16bit TEST+1, TEST
+    lda TEST
+    and #3
+    sta FILTER_CUTOFF_LO
+    lda TEST+1
+    and #3
+    asl
+    asl
+    asl
+    asl
+    asl
+    sta $de
+    lda TEST
+    lsr
+    lsr
+    lsr
+    ora $de
+    sta FILTER_CUTOFF_HI
+
 
     rts
 
