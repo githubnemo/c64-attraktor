@@ -27,10 +27,11 @@ sysline:
     sta .addr + $2000
 }
 
-!macro copy_16bit .dest, .from {
-    lda .from
+!macro copy_16bit_zp .dest, .from {
+    ; assumes that the destination is a zero page address
+    lda #<.from
     sta .dest
-    lda .from+1
+    lda #>.from
     sta .dest+1
 }
 
@@ -1399,16 +1400,27 @@ init_sid
 
     lda SID_INIT + FILTER_RESONANCE_ROUTING
     ora #0b11110001
-    sta SID_INIT + FILTER_RESONANCE_ROUTING
+    ;sta SID_INIT + FILTER_RESONANCE_ROUTING
 
     ; prepare the SID prepare structure
     +copy_sid SID_PREP_1, SID_INIT
     +copy_sid SID_PREP_2, SID_INIT
 
-    +copy_16bit SID_PREP_PTR, SID_PREP_1
-    +copy_16bit SID_REF_PTR, SID_PREP_2
+    +copy_16bit_zp SID_PREP_PTR, SID_PREP_1
+    +copy_16bit_zp SID_REF_PTR, SID_PREP_2
 
-    +copy_sid SID_MEMORY_START, SID_INIT
+    ;+copy_sid SID_MEMORY_START, SID_INIT
+
+    ldy #FREQ_LO_VOICE1
+    lda #$dd
+    sta (SID_PREP_PTR), y
+    ldy #FREQ_HI_VOICE1
+    sta (SID_PREP_PTR), y
+
+    ;sta SID_PREP_1 + FREQ_HI_VOICE1
+    ;sta SID_PREP_1 + FREQ_LO_VOICE1
+
+    +copy_sid SID_MEMORY_START, SID_PREP_1
 
     rts
 }
@@ -1719,6 +1731,8 @@ play:
     lda FP_YCUR+2
     sta $2014
 
+    rts
+
     jsr mult_subroutine
 
     +rshift_16bit TEST+1, TEST
@@ -1728,7 +1742,8 @@ play:
     +rshift_16bit TEST+1, TEST
     lda TEST
     and #3
-    sta SID_MEMORY_START + FILTER_CUTOFF_LO
+    ldy FILTER_CUTOFF_LO
+    sta (SID_PREP_PTR), y
     lda TEST+1
     and #3
     asl
@@ -1742,8 +1757,11 @@ play:
     lsr
     lsr
     ora $de
-    sta SID_MEMORY_START + FILTER_CUTOFF_HI
+    ldy FILTER_CUTOFF_HI
+    sta (SID_PREP_PTR), y
 
+
+    ;+copy_sid SID_MEMORY_START, SID_PREP_1
 
     rts
 
