@@ -208,7 +208,7 @@ clearscr_loop
 
 !addr FILTER_CUTOFF_HI = $d416 - SID_MEMORY_START
 !addr FILTER_CUTOFF_LO = $d415 - SID_MEMORY_START
-!addr FILTER_RESONANCE_ROUTING   = $d417 - SID_MEMORY_START
+!addr FILTER_RESONANCE_ROUTING = $d417 - SID_MEMORY_START
 !addr SID_MAIN_CONTROL = $d418 - SID_MEMORY_START
 
 ; Attractor computation + drawing
@@ -260,6 +260,7 @@ clearscr_loop
 !set offset = offset + sid_size
 !addr SID_PREP_2 = offset
 !set offset = offset + sid_size
+!addr TEST = offset  ; FIXME remove
 
 
 lda#0b00000001
@@ -1398,7 +1399,7 @@ init_sid
 
     lda SID_INIT + FILTER_RESONANCE_ROUTING
     ora #0b11110001
-    sta $d417
+    sta SID_INIT + FILTER_RESONANCE_ROUTING
 
     ; prepare the SID prepare structure
     +copy_sid SID_PREP_1, SID_INIT
@@ -1695,8 +1696,6 @@ waveinit:
 !addr P3 = FP_YCUR+2
 !addr P4 = FP_YCUR+1
 
-!addr TEST = $C650
-
 mult_subroutine:
     ;lda #<FREQ_LO_VOICE1
     ;lda #<FILTER_CUTOFF_LO
@@ -1729,7 +1728,6 @@ play:
     +rshift_16bit TEST+1, TEST
     lda TEST
     and #3
-
     sta SID_MEMORY_START + FILTER_CUTOFF_LO
     lda TEST+1
     and #3
