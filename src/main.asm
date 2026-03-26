@@ -1400,7 +1400,7 @@ init_sid
 
     lda SID_INIT + FILTER_RESONANCE_ROUTING
     ora #0b11110001
-    ;sta SID_INIT + FILTER_RESONANCE_ROUTING
+    sta SID_INIT + FILTER_RESONANCE_ROUTING
 
     ; prepare the SID prepare structure
     +copy_sid SID_PREP_1, SID_INIT
@@ -1409,18 +1409,18 @@ init_sid
     +copy_16bit_zp SID_PREP_PTR, SID_PREP_1
     +copy_16bit_zp SID_REF_PTR, SID_PREP_2
 
-    ;+copy_sid SID_MEMORY_START, SID_INIT
+    +copy_sid SID_MEMORY_START, SID_INIT
 
-    ldy #FREQ_LO_VOICE1
-    lda #$dd
-    sta (SID_PREP_PTR), y
-    ldy #FREQ_HI_VOICE1
-    sta (SID_PREP_PTR), y
+    ;ldy #FREQ_LO_VOICE1
+    ;lda #$dd
+    ;sta (SID_PREP_PTR), y
+    ;ldy #FREQ_HI_VOICE1
+    ;sta (SID_PREP_PTR), y
 
     ;sta SID_PREP_1 + FREQ_HI_VOICE1
     ;sta SID_PREP_1 + FREQ_LO_VOICE1
 
-    +copy_sid SID_MEMORY_START, SID_PREP_1
+    ;+copy_sid SID_MEMORY_START, SID_PREP_1
 
     rts
 }
@@ -1731,8 +1731,6 @@ play:
     lda FP_YCUR+2
     sta $2014
 
-    rts
-
     jsr mult_subroutine
 
     +rshift_16bit TEST+1, TEST
@@ -1742,7 +1740,7 @@ play:
     +rshift_16bit TEST+1, TEST
     lda TEST
     and #3
-    ldy FILTER_CUTOFF_LO
+    ldy #FILTER_CUTOFF_LO
     sta (SID_PREP_PTR), y
     lda TEST+1
     and #3
@@ -1757,11 +1755,11 @@ play:
     lsr
     lsr
     ora $de
-    ldy FILTER_CUTOFF_HI
+    ldy #FILTER_CUTOFF_HI
     sta (SID_PREP_PTR), y
 
 
-    ;+copy_sid SID_MEMORY_START, SID_PREP_1
+    +copy_sid SID_MEMORY_START, SID_PREP_1
 
     rts
 
