@@ -27,6 +27,14 @@ sysline:
     sta .addr + $2000
 }
 
+!macro copy_16bit .dest, .from {
+    lda .from
+    sta .dest
+    lda .from+1
+    sta .dest+1
+}
+
+
 
 start
     +SetBorderColor 0
@@ -145,9 +153,11 @@ clearscr_loop
 !addr SND_TURNED_OFF = $92
 !addr FOO1 = $93
 !addr FOO2 = $94
-!addr FREQ_LO_VOICE1_BUF = $95
+!addr FREQ_LO_VOICE1_BUF = $95  ; TODO cleanup?
 !addr FREQ_HI_VOICE1_BUF = $96
 !addr PLAY_COUNTER = $97
+!addr SID_PREP_PTR = $98 ; size=2
+!addr SID_REF_PTR = $9A ; size=2
 
 
 ; MEMORY LAYOUT
@@ -155,34 +165,51 @@ clearscr_loop
 ; Sound output
 !addr SID_MEMORY_START = $d400
 
-!addr FREQ_LO_VOICE1 = $d400
-!addr FREQ_HI_VOICE1 = $d401
-!addr CONTROL_VOICE1 = $d404
-!addr ATTACK_DECAY_VOICE1 = $d405
-!addr SUSTAIN_RELEASE_VOICE1 = $d406
-!addr WAV_DUTY_LO_VOICE1 = $d402
-!addr WAV_DUTY_HI_VOICE1 = $d403
+; global filter and main volume config for
+; register $d416, $d417 and $d418
+;
+; $d416: filter cutoff freq high byte (bits $d415:{3..0} are the low byte)
+; $d417: filter resonance and routing config
+;   7..4: filter resonance
+;      3: external input into filter
+;      2: voice 3 into filter?
+;      1: voice 2 into filter?
+;      0: voice 1 into filter?
+; $d418: filter mode and main volume control
+;      7: mute voice 3
+;      6: high pass
+;      5: band pass
+;      4: low pass
+;   3..0: main volume
 
-!addr FREQ_LO_VOICE2 = $d407
-!addr FREQ_HI_VOICE2 = $d408
-!addr WAV_DUTY_LO_VOICE2 = $d409
-!addr WAV_DUTY_HI_VOICE2 = $d40a
-!addr CONTROL_VOICE2 = $d40b
-!addr ATTACK_DECAY_VOICE2 = $d40c
-!addr SUSTAIN_RELEASE_VOICE2 = $d40d
+!addr FREQ_LO_VOICE1 = $d400 - SID_MEMORY_START
+!addr FREQ_HI_VOICE1 = $d401 - SID_MEMORY_START
+!addr CONTROL_VOICE1 = $d404 - SID_MEMORY_START
+!addr ATTACK_DECAY_VOICE1 = $d405 - SID_MEMORY_START
+!addr SUSTAIN_RELEASE_VOICE1 = $d406 - SID_MEMORY_START
+!addr WAV_DUTY_LO_VOICE1 = $d402 - SID_MEMORY_START
+!addr WAV_DUTY_HI_VOICE1 = $d403 - SID_MEMORY_START
 
-!addr FREQ_LO_VOICE3 = $d40e
-!addr FREQ_HI_VOICE3 = $d40f
-!addr WAV_DUTY_LO_VOICE3 = $d410
-!addr WAV_DUTY_HI_VOICE3 = $d411
-!addr CONTROL_VOICE3 = $d412
-!addr ATTACK_DECAY_VOICE3 = $d413
-!addr SUSTAIN_RELEASE_VOICE3 = $d414
+!addr FREQ_LO_VOICE2 = $d407 - SID_MEMORY_START
+!addr FREQ_HI_VOICE2 = $d408 - SID_MEMORY_START
+!addr WAV_DUTY_LO_VOICE2 = $d409 - SID_MEMORY_START
+!addr WAV_DUTY_HI_VOICE2 = $d40a - SID_MEMORY_START
+!addr CONTROL_VOICE2 = $d40b - SID_MEMORY_START
+!addr ATTACK_DECAY_VOICE2 = $d40c - SID_MEMORY_START
+!addr SUSTAIN_RELEASE_VOICE2 = $d40d - SID_MEMORY_START
 
-!addr FILTER_CUTOFF_HI = $d416
-!addr FILTER_CUTOFF_LO = $d415
+!addr FREQ_LO_VOICE3 = $d40e - SID_MEMORY_START
+!addr FREQ_HI_VOICE3 = $d40f - SID_MEMORY_START
+!addr WAV_DUTY_LO_VOICE3 = $d410 - SID_MEMORY_START
+!addr WAV_DUTY_HI_VOICE3 = $d411 - SID_MEMORY_START
+!addr CONTROL_VOICE3 = $d412 - SID_MEMORY_START
+!addr ATTACK_DECAY_VOICE3 = $d413 - SID_MEMORY_START
+!addr SUSTAIN_RELEASE_VOICE3 = $d414 - SID_MEMORY_START
 
-!addr SID_MAIN_CONTROL = $d418
+!addr FILTER_CUTOFF_HI = $d416 - SID_MEMORY_START
+!addr FILTER_CUTOFF_LO = $d415 - SID_MEMORY_START
+!addr FILTER_RESONANCE_ROUTING   = $d417 - SID_MEMORY_START
+!addr SID_MAIN_CONTROL = $d418 - SID_MEMORY_START
 
 ; Attractor computation + drawing
 !addr FP_A  = $C400
@@ -208,6 +235,7 @@ clearscr_loop
 
 !addr SCREEN_ADDR = $C630
 
+
 ; X offset where the attractor is visually split in two halves;
 ; used for implementing the left and right sound switching
 !set X_SEPARATOR = 164
@@ -221,6 +249,17 @@ clearscr_loop
 !addr SCREEN_MASK_OR_5 = $C645
 !addr SCREEN_MASK_OR_6 = $C646
 !addr SCREEN_MASK_OR_7 = $C647
+
+
+; memory allocation for double buffering of SID values
+!set sid_size = ($D41C - $D400 + 1)
+!set offset = $C650
+!addr SID_INIT = offset
+!set offset = offset + sid_size
+!addr SID_PREP_1 = offset
+!set offset = offset + sid_size
+!addr SID_PREP_2 = offset
+!set offset = offset + sid_size
 
 
 lda#0b00000001
@@ -1196,6 +1235,18 @@ clear_rng_pixel
 
 
 
+; --------------- SOUND ---------------
+
+!macro copy_sid .dest, .from {
+    ldy #sid_size
+.loop
+    lda .from, y
+    sta .dest, y
+    dey
+    bpl .loop
+}
+
+
 
 ; initial pulse wave duty cycles for each voice
 ;
@@ -1249,10 +1300,16 @@ init_sid
     lda #1
     sta SND_TURNED_OFF
 
+    ; initialize the SID_INIT region with the default values
+    ; from the SID. Then we will set specific values to our
+    ; preferences. SID_INIT will be our starting point to base
+    ; PREP_1 and _2 on.
+    +copy_sid SID_INIT, SID_MEMORY_START
+
     ldy #$18
     lda #$00
 .loop1
-    sta SID_MEMORY_START,y
+    sta SID_INIT, y
     dey
     bpl .loop1      ; clear the SID memory with zeroes
 
@@ -1262,16 +1319,16 @@ init_sid
     ldx #$02        ; x = voice index
 .loop2
     lda init_values_pulse,x
-    sta WAV_DUTY_HI_VOICE1,y
+    sta SID_INIT + WAV_DUTY_HI_VOICE1,y
 
     lda init_values_wave,x
-    sta CONTROL_VOICE1,y
+    sta SID_INIT + CONTROL_VOICE1,y
 
     lda #$00
-    sta ATTACK_DUR_VOICE1,y
+    sta SID_INIT + ATTACK_DECAY_VOICE1,y
 
     lda init_values_sid,x
-    sta FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
+    sta SID_INIT + FILTER_CUTOFF_HI,x  ; set filter cutoff, resonance and mode / main volume
                             ; abuses x for writing several bytes but does not
                             ; depend on a voice (is a global setting)
     tya
@@ -1285,53 +1342,53 @@ init_sid
     ; TEST CODE PLS REMOVE THX
 
     lda #0b01000001
-    sta CONTROL_VOICE1
+    sta SID_INIT + CONTROL_VOICE1
 
     ldy #29   ; D + 35c
     lda freqlo,y
-    sta FREQ_LO_VOICE1
+    sta SID_INIT + FREQ_LO_VOICE1
     lda freqhi,y
-    sta FREQ_HI_VOICE1
+    sta SID_INIT + FREQ_HI_VOICE1
 
     ; wav duty is 12 bit =)
     ; fun fact: half of 2^12 is 2^11!
     lda #$ff
-    sta WAV_DUTY_LO_VOICE1
+    sta SID_INIT + WAV_DUTY_LO_VOICE1
     lda #7
-    sta WAV_DUTY_HI_VOICE1
+    sta SID_INIT + WAV_DUTY_HI_VOICE1
 
     lda #$00
-    sta ATTACK_DECAY_VOICE1
+    sta SID_INIT + ATTACK_DECAY_VOICE1
     lda #$f0
-    sta SUSTAIN_RELEASE_VOICE1
+    sta SID_INIT + SUSTAIN_RELEASE_VOICE1
 
     ; setup voice 2
     lda #0b01000001
-    sta CONTROL_VOICE2
+    sta SID_INIT + CONTROL_VOICE2
 
     lda #$ff
-    sta WAV_DUTY_LO_VOICE2
+    sta SID_INIT + WAV_DUTY_LO_VOICE2
     lda #7
-    sta WAV_DUTY_HI_VOICE2
+    sta SID_INIT + WAV_DUTY_HI_VOICE2
 
     lda #$00
-    sta ATTACK_DECAY_VOICE2
+    sta SID_INIT + ATTACK_DECAY_VOICE2
     lda #$f0
-    sta SUSTAIN_RELEASE_VOICE2
+    sta SID_INIT + SUSTAIN_RELEASE_VOICE2
 
     ; setup voice 3
     lda #0b01000001
-    sta CONTROL_VOICE3
+    sta SID_INIT + CONTROL_VOICE3
 
     lda #$ff
-    sta WAV_DUTY_LO_VOICE3
+    sta SID_INIT + WAV_DUTY_LO_VOICE3
     lda #7
-    sta WAV_DUTY_HI_VOICE3
+    sta SID_INIT + WAV_DUTY_HI_VOICE3
 
     lda #$00
-    sta ATTACK_DECAY_VOICE3
+    sta SID_INIT + ATTACK_DECAY_VOICE3
     lda #$f0
-    sta SUSTAIN_RELEASE_VOICE3
+    sta SID_INIT + SUSTAIN_RELEASE_VOICE3
 
     lda #0
     sta FOO1
@@ -1339,11 +1396,18 @@ init_sid
     sta FOO2
 
 
-    lda $d417
+    lda SID_INIT + FILTER_RESONANCE_ROUTING
     ora #0b11110001
     sta $d417
 
+    ; prepare the SID prepare structure
+    +copy_sid SID_PREP_1, SID_INIT
+    +copy_sid SID_PREP_2, SID_INIT
 
+    +copy_16bit SID_PREP_PTR, SID_PREP_1
+    +copy_16bit SID_REF_PTR, SID_PREP_2
+
+    +copy_sid SID_MEMORY_START, SID_INIT
 
     rts
 }
@@ -1616,41 +1680,6 @@ waveinit:
 !byte $08,$08,$08
 
 
-; global filter and main volume config for
-; register $d416, $d417 and $d418
-;
-; $d416: filter cutoff freq high byte (bits $d415:{3..0} are the low byte)
-; $d417: filter resonance and routing config
-;   7..4: filter resonance
-;      3: external input into filter
-;      2: voice 3 into filter?
-;      1: voice 2 into filter?
-;      0: voice 1 into filter?
-; $d418: filter mode and main volume control
-;      7: mute voice 3
-;      6: high pass
-;      5: band pass
-;      4: low pass
-;   3..0: main volume
-
-!addr FREQ_LO_VOICE1 = $d400
-!addr FREQ_HI_VOICE1 = $d401
-!addr CONTROL_VOICE1 = $d404
-!addr ATTACK_DUR_VOICE1 = $d405
-!addr SUSTAIN_REL_VOICE1 = $d406
-
-!addr FREQ_LO_VOICE2 = $d407
-!addr FREQ_HI_VOICE2 = $d408
-!addr CONTROL_VOICE2 = $d40b
-!addr ATTACK_DUR_VOICE2 = $d40c
-!addr SUSTAIN_REL_VOICE2 = $d40d
-
-!addr FREQ_LO_VOICE3 = $d40e
-!addr FREQ_HI_VOICE3 = $d40f
-!addr CONTROL_VOICE3 = $d412
-!addr ATTACK_DUR_VOICE3 = $d413
-!addr SUSTAIN_REL_VOICE3 = $d414
-
 
 
 
@@ -1700,7 +1729,8 @@ play:
     +rshift_16bit TEST+1, TEST
     lda TEST
     and #3
-    sta FILTER_CUTOFF_LO
+
+    sta SID_MEMORY_START + FILTER_CUTOFF_LO
     lda TEST+1
     and #3
     asl
@@ -1714,7 +1744,7 @@ play:
     lsr
     lsr
     ora $de
-    sta FILTER_CUTOFF_HI
+    sta SID_MEMORY_START + FILTER_CUTOFF_HI
 
 
     rts
