@@ -27,7 +27,7 @@ sysline:
     sta .addr + $2000
 }
 
-!macro copy_16bit_zp .dest, .from {
+!macro copy_16bit_to_zp .dest, .from {
     ; assumes that the destination is a zero page address
     lda #<.from
     sta .dest
@@ -35,6 +35,14 @@ sysline:
     sta .dest+1
 }
 
+; swap memory content .a and .b
+; clobbers A, X
+!macro swap .a, .b {
+    lda .a
+    ldx .b
+    sta .b
+    stx .a
+}
 
 
 start
@@ -152,8 +160,7 @@ clearscr_loop
 !addr RNG_STATE_LO = $90
 !addr RNG_STATE_HI = $91
 !addr SND_TURNED_OFF = $92
-!addr FOO1 = $93
-!addr FOO2 = $94
+!addr ISR_TEMP = $93 ; size = 2
 !addr FREQ_LO_VOICE1_BUF = $95  ; TODO cleanup?
 !addr FREQ_HI_VOICE1_BUF = $96
 !addr PLAY_COUNTER = $97
@@ -253,7 +260,7 @@ clearscr_loop
 
 
 ; memory allocation for double buffering of SID values
-!set sid_size = ($D41C - $D400 + 1)
+!set sid_size = ($D418 - $D400 + 1)
 !set offset = $C650
 !addr SID_INIT = offset
 !set offset = offset + sid_size
@@ -1239,7 +1246,11 @@ clear_rng_pixel
 
 ; --------------- SOUND ---------------
 
-!macro copy_sid .dest, .from {
+; TODO potentially optimize copy_sid_* to only copy values that
+; we are going to modify realistically. many values are probably not
+; used.
+;
+!macro copy_sid_mem_to_mem .dest, .from {
     ldy #sid_size
 .loop
     lda .from, y
@@ -1248,6 +1259,32 @@ clear_rng_pixel
     bpl .loop
 }
 
+!macro copy_sid_mem_to_ptr .dest, .from {
+    ldy #sid_size
+.loop
+    lda .from, y
+    sta (.dest), y
+    dey
+    bpl .loop
+}
+
+!macro copy_sid_ptr_to_mem .dest, .from {
+    ldy #sid_size
+.loop
+    lda (.from), y
+    sta .dest, y
+    dey
+    bpl .loop
+}
+
+!macro copy_sid_ptr_to_ptr .dest, .from {
+    ldy #sid_size
+.loop
+    lda (.from), y
+    sta (.dest), y
+    dey
+    bpl .loop
+}
 
 
 ; initial pulse wave duty cycles for each voice
@@ -1306,7 +1343,7 @@ init_sid
     ; from the SID. Then we will set specific values to our
     ; preferences. SID_INIT will be our starting point to base
     ; PREP_1 and _2 on.
-    +copy_sid SID_INIT, SID_MEMORY_START
+    +copy_sid_mem_to_mem SID_INIT, SID_MEMORY_START
 
     ldy #$18
     lda #$00
@@ -1393,9 +1430,9 @@ init_sid
     sta SID_INIT + SUSTAIN_RELEASE_VOICE3
 
     lda #0
-    sta FOO1
+    sta ISR_TEMP
     lda #0
-    sta FOO2
+    sta ISR_TEMP+1
 
 
     lda SID_INIT + FILTER_RESONANCE_ROUTING
@@ -1403,13 +1440,13 @@ init_sid
     sta SID_INIT + FILTER_RESONANCE_ROUTING
 
     ; prepare the SID prepare structure
-    +copy_sid SID_PREP_1, SID_INIT
-    +copy_sid SID_PREP_2, SID_INIT
+    +copy_sid_mem_to_mem SID_PREP_1, SID_INIT
+    +copy_sid_mem_to_mem SID_PREP_2, SID_INIT
 
-    +copy_16bit_zp SID_PREP_PTR, SID_PREP_1
-    +copy_16bit_zp SID_REF_PTR, SID_PREP_2
+    +copy_16bit_to_zp SID_PREP_PTR, SID_PREP_1
+    +copy_16bit_to_zp SID_REF_PTR, SID_PREP_2
 
-    +copy_sid SID_MEMORY_START, SID_INIT
+    +copy_sid_mem_to_mem SID_MEMORY_START, SID_INIT
 
     ;ldy #FREQ_LO_VOICE1
     ;lda #$dd
@@ -1724,6 +1761,8 @@ mult_subroutine:
 
 play:
 
+    +copy_sid_mem_to_ptr SID_PREP_PTR, SID_INIT
+
     lda FP_YCUR+0
     sta $2010
     lda FP_YCUR+1
@@ -1759,7 +1798,15 @@ play:
     sta (SID_PREP_PTR), y
 
 
-    +copy_sid SID_MEMORY_START, SID_PREP_1
+    ;+copy_sid SID_MEMORY_START, SID_PREP_1
+
+    ; copy the PREP stage to the SID memory to 'commit' the changes.
+    ; then we can swap REF and PREP pointers so that the current PREP
+    ; is the new REF stage.
+    +copy_sid_ptr_to_mem SID_MEMORY_START, SID_PREP_PTR
+    +swap SID_PREP_PTR, SID_REF_PTR
+    +swap SID_PREP_PTR+1, SID_REF_PTR+1
+
 
     rts
 
@@ -1886,19 +1933,19 @@ play:
     sec
     lda freqlo,y
     sbc FREQ_LO_VOICE1_BUF
-    sta FOO1
+    sta ISR_TEMP
     lda freqhi,y
     sbc FREQ_HI_VOICE1_BUF
-    sta FOO2
+    sta ISR_TEMP+1
 
 
     ldy #29
     clc
     lda freqlo,y
-    adc FOO1
+    adc ISR_TEMP
     sta FREQ_LO_VOICE1_BUF
     lda freqhi,y
-    adc FOO2
+    adc ISR_TEMP+1
     sta FREQ_HI_VOICE1_BUF
 
 
@@ -1936,18 +1983,18 @@ play:
     sec
     lda freqlo,y
     sbc FREQ_LO_VOICE1_BUF
-    sta FOO1
+    sta ISR_TEMP
     lda freqhi,y
     sbc FREQ_HI_VOICE1_BUF
-    sta FOO2
+    sta ISR_TEMP+1
 
     ldy #29
     clc
     lda freqlo,y
-    adc FOO1
+    adc ISR_TEMP
     sta FREQ_LO_VOICE1_BUF
     lda freqhi,y
-    adc FOO2
+    adc ISR_TEMP+1
     sta FREQ_HI_VOICE1_BUF
 .no_vibrato
 
@@ -2042,3 +2089,5 @@ freqhi:
 
 arpeggio:
 !byte   0,4,7,11,7,4,0,4
+
+; vim:ft=acme
