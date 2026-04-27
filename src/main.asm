@@ -260,6 +260,7 @@ clearscr_loop
 
 
 ; memory allocation for double buffering of SID values
+; NOTE that we don't track the read-only values of the SID memory ($D419+)
 !set sid_size = ($D418 - $D400 + 1)
 !set offset = $C650
 !addr SID_INIT = offset
@@ -1435,9 +1436,18 @@ init_sid
     sta ISR_TEMP+1
 
 
+    ; TODO remove test code
+    ;
+    ; filter resonance full, filter for voice 1
     lda SID_INIT + FILTER_RESONANCE_ROUTING
     ora #0b11110001
     sta SID_INIT + FILTER_RESONANCE_ROUTING
+
+    lda #$ff
+    sta SID_INIT + FILTER_CUTOFF_LO
+    sta SID_INIT + FILTER_CUTOFF_HI
+
+
 
     ; prepare the SID prepare structure
     +copy_sid_mem_to_mem SID_PREP_1, SID_INIT
@@ -1762,6 +1772,27 @@ mult_subroutine:
 play:
 
     +copy_sid_mem_to_ptr SID_PREP_PTR, SID_INIT
+
+
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$0f
+    asl
+    asl
+    asl
+    asl
+    ldy #WAV_DUTY_LO_VOICE1
+    sta (SID_PREP_PTR), y
+    lda FP_YCUR+1
+    eor #0b10000000
+    and #$f0
+    lsr
+    lsr
+    lsr
+    lsr
+    ldy #WAV_DUTY_HI_VOICE1
+    sta (SID_PREP_PTR), y
+
 
     lda FP_YCUR+0
     sta $2010
